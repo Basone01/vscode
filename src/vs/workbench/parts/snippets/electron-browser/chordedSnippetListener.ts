@@ -36,6 +36,9 @@ export class ChordedSnippetListener extends Disposable {
 		this._update();
 	}
 	_allowed(e: IKeyboardEvent): boolean {
+		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
+			return false;
+		}
 		return (e.keyCode >= KeyCode.KEY_A && e.keyCode <= KeyCode.KEY_Z) ||
 			(e.keyCode >= KeyCode.KEY_0 && e.keyCode <= KeyCode.KEY_9) ||
 			e.keyCode === KeyCode.US_SEMICOLON ||
