@@ -24,9 +24,9 @@ import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { Snippet } from 'vs/workbench/parts/snippets/electron-browser/snippetsFile';
+import { ChordedSnippetListener } from './chordedSnippetListener';
 
 export class TabCompletionController implements editorCommon.IEditorContribution {
-
 	private static readonly ID = 'editor.tabCompletionController';
 	static ContextKey = new RawContextKey<boolean>('hasSnippetCompletions', undefined);
 
@@ -38,6 +38,7 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 	private _activeSnippets: Snippet[] = [];
 	private _selectionListener: IDisposable;
 	private _configListener: IDisposable;
+	private _chordedSnippetListener: ChordedSnippetListener;
 
 	constructor(
 		private readonly _editor: ICodeEditor,
@@ -52,6 +53,10 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 			}
 		});
 		this._update();
+		this._chordedSnippetListener = new ChordedSnippetListener(
+			this._editor,
+			length => this._onChordDetect(length)
+		);
 	}
 
 	getId(): string {
@@ -61,6 +66,7 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 	dispose(): void {
 		dispose(this._configListener);
 		dispose(this._selectionListener);
+		dispose(this._chordedSnippetListener);
 	}
 
 	private _update(): void {
@@ -75,17 +81,39 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		}
 	}
 
-	private _updateSnippets(): void {
-
-		// reset first
-		this._activeSnippets = [];
-
+	private _getSnippets() {
 		// lots of dance for getting the
 		const selection = this._editor.getSelection();
 		const model = this._editor.getModel();
 		model.tokenizeIfCheap(selection.positionLineNumber);
 		const id = model.getLanguageIdAtPosition(selection.positionLineNumber, selection.positionColumn);
 		const snippets = this._snippetService.getSnippetsSync(id);
+		return { selection, model, snippets };
+	}
+
+	private _onChordDetect(length: number) {
+		const { selection, model, snippets } = this._getSnippets();
+		const position = selection.getPosition();
+		const line = model.getLineContent(position.lineNumber).substr(0, position.column - 1);
+		if (line.length < length) {
+			return;
+		}
+		const sortString = (s: string) => s.split('').sort().join('');
+		const text = sortString(line.slice(-length));
+		for (const snippet of snippets) {
+			if (snippet.chorded && sortString(snippet.prefix) === text) {
+				SnippetController2.get(this._editor).insert(snippet.codeSnippet, snippet.prefix.length, 0);
+				return;
+			}
+		}
+	}
+
+	private _updateSnippets(): void {
+
+		// reset first
+		this._activeSnippets = [];
+
+		const { selection, model, snippets } = this._getSnippets();
 
 		if (!snippets) {
 			// nothing for this language

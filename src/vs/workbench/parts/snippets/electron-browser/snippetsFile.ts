@@ -28,6 +28,7 @@ export class Snippet {
 		readonly body: string,
 		readonly source: string,
 		readonly isFromExtension?: boolean,
+		readonly chorded?: boolean,
 	) {
 		//
 	}
@@ -121,6 +122,7 @@ interface JsonSerializedSnippet {
 	scope: string;
 	prefix: string | string[];
 	description: string;
+	chorded: boolean;
 }
 
 function isJsonSerializedSnippet(thing: any): thing is JsonSerializedSnippet {
@@ -218,7 +220,7 @@ export class SnippetFile {
 
 	private _parseSnippet(name: string, snippet: JsonSerializedSnippet, bucket: Snippet[]): void {
 
-		let { prefix, body, description } = snippet;
+		let { prefix, body, description, chorded } = snippet;
 
 		if (Array.isArray(body)) {
 			body = body.join('\n');
@@ -253,7 +255,8 @@ export class SnippetFile {
 			description,
 			body,
 			source,
-			this._extension !== void 0
+			this._extension !== void 0,
+			chorded
 		));
 	}
 }

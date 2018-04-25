@@ -53,6 +53,10 @@ const languageScopeSchema: IJSONSchema = {
 			description: {
 				description: nls.localize('snippetSchema.json.description', 'The snippet description.'),
 				type: 'string'
+			},
+			chorded: {
+				description: nls.localize('snippetSchema.json.chorded', 'Whether the snippet can be activated by smashing the prefix keys at once.'),
+				type: 'boolean'
 			}
 		},
 		additionalProperties: false
@@ -92,6 +96,10 @@ const globalSchema: IJSONSchema = {
 			description: {
 				description: nls.localize('snippetSchema.json.description', 'The snippet description.'),
 				type: 'string'
+			},
+			chorded: {
+				description: nls.localize('snippetSchema.json.chorded', 'Whether the snippet can be activated by smashing the prefix keys at once.'),
+				type: 'boolean'
 			}
 		},
 		additionalProperties: false
