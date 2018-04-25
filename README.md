@@ -1,3 +1,14 @@
+# โค้ด (@dtinth’s VS Code Fork)
+
+<p align="center">
+  <img src="./resources/code-dtinth-fork-logo.svg">
+</p>
+
+I had to fork VS Code to implement some features that would not be possible using [VS Code’s Extension API](https://code.visualstudio.com/docs/extensionAPI/overview).
+
+- [Chorded Snippets](https://github.com/Microsoft/vscode/issues/46487)
+
+
 # Visual Studio Code - Open Source
 
 [![Build Status](https://travis-ci.org/Microsoft/vscode.svg?branch=master)](https://travis-ci.org/Microsoft/vscode)
