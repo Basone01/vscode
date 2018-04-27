@@ -19,7 +19,7 @@ I had to fork VS Code to implement some features that would not be possible usin
 		]
 	},
 	```
-	
+
 	Note the `"chorded": true` directive. Now, if I smashed the <kbd>n</kbd><kbd>s</kbd><kbd>t</kbd> keys simultaneously (order doesn’t matter, but both 3 keys must be pressed at the same time) it will activate the snippet.
 
 - [**Rainbow Strings**](https://medium.com/hacking-atom/rainbow-strings-94a2b99cf8b7) — I prefer strings to be colorful, so in this fork if you set a text color to a magic color, `#fefeff`, then it turns into a rainbow.
@@ -30,9 +30,12 @@ I had to fork VS Code to implement some features that would not be possible usin
     },
 	```
 
-Demo:
+**Demo:**
 
 ![Demo](https://i.imgur.com/wxV0gAu.gif)
+
+- Chords: `fun`&rarr;`function$1 () {}`, `con`&rarr;`console.log($1)`, `ret`&rarr;`return`, `fal`&rarr;`false`
+- Rainbow strings (`'Hello'`)
 
 
 # Visual Studio Code - Open Source
