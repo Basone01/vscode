@@ -388,6 +388,19 @@ export function generateTokensCSSForColorMap(colorMap: Color[]): string {
 	for (let i = 1, len = colorMap.length; i < len; i++) {
 		let color = colorMap[i];
 		rules[i] = `.mtk${i} { color: ${color}; }`;
+
+		// HACK WARNING:
+		// Rainbow text.
+		if (String(color) === '#fefeff') {
+			rules[i] += `.mtk${i} {
+				background: linear-gradient(-45deg,
+						hsl(0, 95%, 80%), hsl(60, 95%, 80%), hsl(120, 95%, 80%), hsl(180, 95%, 80%),
+						hsl(240, 95%, 80%), hsl(300, 95%, 80%), hsl(360, 95%, 80%));
+				background-clip: text;
+				-webkit-background-clip: text;
+				-webkit-text-fill-color: transparent;
+			}`;
+		}
 	}
 	rules.push('.mtki { font-style: italic; }');
 	rules.push('.mtkb { font-weight: bold; }');
