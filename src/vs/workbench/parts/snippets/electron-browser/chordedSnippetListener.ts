@@ -18,9 +18,17 @@ export class ChordedSnippetListener extends Disposable {
 		private _onDetect: (length: number) => void
 	) {
 		super();
+		this._register(_editor.onDidFocusEditor(() => this.reset()));
 		this._register(_editor.onKeyDown(e => this.onKeyDown(e)));
 		this._register(_editor.onKeyUp(e => this.onKeyUp(e)));
 	}
+
+	reset() {
+		for (const key of Object.keys(this._activeKeys)) {
+			delete this._activeKeys[key];
+		}
+	}
+
 	onKeyDown(e: IKeyboardEvent) {
 		if (!this._allowed(e)) {
 			return;
