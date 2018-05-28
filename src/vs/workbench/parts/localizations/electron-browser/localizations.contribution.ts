@@ -15,7 +15,7 @@ import { ExtensionsRegistry } from 'vs/workbench/services/extensions/common/exte
 import { ILocalizationsService, LanguageType } from 'vs/platform/localizations/common/localizations';
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
 import * as platform from 'vs/base/common/platform';
-import { IExtensionManagementService, DidInstallExtensionEvent, LocalExtensionType, IExtensionGalleryService, IGalleryExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
+import { IExtensionManagementService, DidInstallExtensionEvent, LocalExtensionType, IExtensionGalleryService, IGalleryExtension, InstallOperation } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import Severity from 'vs/base/common/severity';
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
@@ -23,15 +23,16 @@ import { IEnvironmentService } from 'vs/platform/environment/common/environment'
 import URI from 'vs/base/common/uri';
 import { join } from 'vs/base/common/paths';
 import { IWindowsService } from 'vs/platform/windows/common/windows';
-import { IStorageService, } from 'vs/platform/storage/common/storage';
+import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { TPromise } from 'vs/base/common/winjs.base';
-import product from 'vs/platform/node/product';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { VIEWLET_ID as EXTENSIONS_VIEWLET_ID, IExtensionsViewlet } from 'vs/workbench/parts/extensions/common/extensions';
+import { minimumTranslatedStrings } from 'vs/platform/node/minimalTranslations';
+import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 
 // Register action to configure locale and related settings
 const registry = Registry.as<IWorkbenchActionRegistry>(Extensions.WorkbenchActions);
-registry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureLocaleAction, ConfigureLocaleAction.ID, ConfigureLocaleAction.LABEL), 'Configure Language');
+registry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureLocaleAction, ConfigureLocaleAction.ID, ConfigureLocaleAction.LABEL), 'Configure Display Language');
 
 export class LocalizationWorkbenchContribution extends Disposable implements IWorkbenchContribution {
 	constructor(
@@ -43,7 +44,8 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 		@IStorageService private storageService: IStorageService,
 		@IExtensionManagementService private extensionManagementService: IExtensionManagementService,
 		@IExtensionGalleryService private galleryService: IExtensionGalleryService,
-		@IViewletService private viewletService: IViewletService
+		@IViewletService private viewletService: IViewletService,
+		@ITelemetryService private telemetryService: ITelemetryService
 	) {
 		super();
 		this.updateLocaleDefintionSchema();
@@ -68,7 +70,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 
 	private onDidInstallExtension(e: DidInstallExtensionEvent): void {
 		const donotAskUpdateKey = 'langugage.update.donotask';
-		if (!this.storageService.getBoolean(donotAskUpdateKey) && e.local && e.local.manifest.contributes && e.local.manifest.contributes.localizations && e.local.manifest.contributes.localizations.length) {
+		if (!this.storageService.getBoolean(donotAskUpdateKey) && e.local && e.operation === InstallOperation.Install && e.local.manifest.contributes && e.local.manifest.contributes.localizations && e.local.manifest.contributes.localizations.length) {
 			const locale = e.local.manifest.contributes.localizations[0].languageId;
 			if (platform.language !== locale) {
 				this.notificationService.prompt(
@@ -96,6 +98,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 
 	private checkAndInstall(): void {
 		const language = platform.language;
+		const locale = platform.locale;
 		if (language !== 'en' && language !== 'en_us') {
 			this.isLanguageInstalled(language)
 				.then(installed => {
@@ -106,13 +109,126 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 									this.notificationService.prompt(Severity.Warning, localize('install language pack', "In the near future, VS Code will only support language packs in the form of Marketplace extensions. Please install the '{0}' extension in order to continue to use the currently configured language. ", extension.displayName || extension.displayName),
 										[
 											{ label: localize('install', "Install"), run: () => this.installExtension(extension) },
-											{ label: localize('more information', "More Information..."), run: () => window.open('https://go.microsoft.com/fwlink/?linkid=830387') }
+											{ label: localize('more information', "More Information..."), run: () => window.open('https://go.microsoft.com/fwlink/?linkid=872941') }
 										]);
 								}
 							});
 					}
 				});
+			return;
 		}
+
+		const languagePackSuggestionIgnoreList = <string[]>JSON.parse(this.storageService.get
+			('extensionsAssistant/languagePackSuggestionIgnore', StorageScope.GLOBAL, '[]'));
+
+		if (language === locale || languagePackSuggestionIgnoreList.indexOf(language) > -1) {
+			return;
+		}
+
+		this.isLanguageInstalled(locale)
+			.then(installed => {
+				if (installed) {
+					return;
+				}
+
+				const ceintlExtensionSearch = this.galleryService.query({ names: [`MS-CEINTL.vscode-language-pack-${locale}`], pageSize: 1 });
+				const tagSearch = this.galleryService.query({ text: `tag:lp-${locale}`, pageSize: 1 });
+
+				TPromise.join([ceintlExtensionSearch, tagSearch]).then(([ceintlResult, tagResult]) => {
+					if (ceintlResult.total === 0 && tagResult.total === 0) {
+						return;
+					}
+
+					const extensionToInstall = ceintlResult.total === 1 ? ceintlResult.firstPage[0] : tagResult.total === 1 ? tagResult.firstPage[0] : null;
+					const extensionToFetchTranslationsFrom = extensionToInstall || tagResult.total > 0 ? tagResult.firstPage[0] : null;
+
+					if (!extensionToFetchTranslationsFrom || !extensionToFetchTranslationsFrom.assets.manifest) {
+						return;
+					}
+
+					this.galleryService.getManifest(extensionToFetchTranslationsFrom).then(x => {
+						if (!x.contributes || !x.contributes.localizations) {
+							return;
+						}
+						const locContribution = x.contributes.localizations.filter(x => x.languageId.toLowerCase() === locale)[0];
+						if (!locContribution) {
+							return;
+						}
+
+						const translations = {
+							...minimumTranslatedStrings,
+							...(locContribution.minimalTranslations || {})
+						};
+
+						const logUserReaction = (userReaction: string) => {
+							/* __GDPR__
+								"languagePackSuggestion:popup" : {
+									"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+									"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+								}
+							*/
+							this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction, language });
+						};
+
+						const searchAction = {
+							label: translations['searchMarketplace'],
+							run: () => {
+								logUserReaction('search');
+								this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
+									.then(viewlet => viewlet as IExtensionsViewlet)
+									.then(viewlet => {
+										viewlet.search(`tag:lp-${locale}`);
+										viewlet.focus();
+									});
+							}
+						};
+
+						const installAction = {
+							label: translations['install'],
+							run: () => {
+								logUserReaction('install');
+								this.installExtension(extensionToInstall);
+							}
+						};
+
+						const installAndRestartAction = {
+							label: translations['installAndRestart'],
+							run: () => {
+								logUserReaction('installAndRestart');
+								this.installExtension(extensionToInstall).then(() => this.windowsService.relaunch({}));
+							}
+						};
+
+						const mainActions = extensionToInstall ? [installAndRestartAction, installAction] : [searchAction];
+						const promptMessage = translations[extensionToInstall ? 'installAndRestartMessage' : 'showLanguagePackExtensions']
+							.replace('{0}', locContribution.languageNameLocalized || locContribution.languageName || locale);
+
+						this.notificationService.prompt(
+							Severity.Info,
+							promptMessage,
+							[...mainActions,
+							{
+								label: localize('neverAgain', "Don't Show Again"),
+								isSecondary: true,
+								run: () => {
+									languagePackSuggestionIgnoreList.push(language);
+									this.storageService.store(
+										'extensionsAssistant/languagePackSuggestionIgnore',
+										JSON.stringify(languagePackSuggestionIgnoreList),
+										StorageScope.GLOBAL
+									);
+									logUserReaction('neverShowAgain');
+								}
+							}],
+							() => {
+								logUserReaction('cancelled');
+							}
+						);
+
+					});
+				});
+			});
+
 	}
 
 	private getLanguagePackExtension(language: string): TPromise<IGalleryExtension> {
@@ -120,7 +236,7 @@ export class LocalizationWorkbenchContribution extends Disposable implements IWo
 			.then(coreLanguages => {
 				if (coreLanguages.some(c => c.toLowerCase() === language)) {
 					const extensionIdPrefix = language === 'zh-cn' ? 'zh-hans' : language === 'zh-tw' ? 'zh-hant' : language;
-					const extensionId = product.quality !== 'insider' ? `MS-CEINTL.vscode-insiders-language-pack-${extensionIdPrefix}` : `MS-CEINTL.vscode-language-pack-${extensionIdPrefix}`;
+					const extensionId = `MS-CEINTL.vscode-language-pack-${extensionIdPrefix}`;
 					return this.galleryService.query({ names: [extensionId], pageSize: 1 })
 						.then(result => result.total === 1 ? result.firstPage[0] : null);
 				}

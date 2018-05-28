@@ -51,7 +51,7 @@ export class IssueService implements IIssueService {
 		});
 
 		this._issueParentWindow = BrowserWindow.getFocusedWindow();
-		const position = this.getWindowPosition(this._issueParentWindow, 800, 900);
+		const position = this.getWindowPosition(this._issueParentWindow, 700, 800);
 		this._issueWindow = new BrowserWindow({
 			width: position.width,
 			height: position.height,
@@ -75,6 +75,12 @@ export class IssueService implements IIssueService {
 	}
 
 	openProcessExplorer(data: ProcessExplorerData): TPromise<void> {
+		ipcMain.on('windowsInfoRequest', event => {
+			this.launchService.getMainProcessInfo().then(info => {
+				event.sender.send('windowsInfoResponse', info.windows);
+			});
+		});
+
 		// Create as singleton
 		if (!this._processExplorerWindow) {
 			const position = this.getWindowPosition(BrowserWindow.getFocusedWindow(), 800, 300);

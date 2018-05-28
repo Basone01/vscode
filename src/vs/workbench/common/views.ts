@@ -57,6 +57,8 @@ export interface IViewDescriptor {
 	readonly collapsed?: boolean;
 
 	readonly canToggleVisibility?: boolean;
+
+	readonly hideByDefault?: boolean;
 }
 
 export interface IViewsRegistry {
@@ -123,9 +125,9 @@ export const ViewsRegistry: IViewsRegistry = new class implements IViewsRegistry
 				this._views.delete(location);
 				this._viewLocations.splice(this._viewLocations.indexOf(location), 1);
 			}
+			this._onViewsDeregistered.fire(viewsToDeregister);
 		}
 
-		this._onViewsDeregistered.fire(viewsToDeregister);
 	}
 
 	getViews(loc: ViewLocation): IViewDescriptor[] {
@@ -160,6 +162,12 @@ export interface IViewsViewlet extends IViewlet {
 export interface ITreeViewer extends IDisposable {
 
 	dataProvider: ITreeViewDataProvider;
+
+	readonly onDidExpandItem: Event<ITreeItem>;
+
+	readonly onDidCollapseItem: Event<ITreeItem>;
+
+	readonly onDidChangeSelection: Event<ITreeItem[]>;
 
 	refresh(treeItems?: ITreeItem[]): TPromise<void>;
 
@@ -233,9 +241,6 @@ export interface ITreeItem {
 
 export interface ITreeViewDataProvider {
 
-	onDidChange: Event<ITreeItem[] | undefined | null>;
-
-	onDispose: Event<void>;
-
 	getChildren(element?: ITreeItem): TPromise<ITreeItem[]>;
+
 }

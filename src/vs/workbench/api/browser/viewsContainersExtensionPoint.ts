@@ -50,7 +50,7 @@ const viewsContainerSchema: IJSONSchema = {
 			type: 'string'
 		},
 		icon: {
-			description: localize('vscode.extension.contributes.views.containers.icon', 'Path to the container icon'),
+			description: localize('vscode.extension.contributes.views.containers.icon', "Path to the container icon. Icons are 24x24 centered on a 50x40 block and have a fill color of 'rgb(215, 218, 224)' or '#d7dae0'. It is recommended that icons be in SVG, though any image file type is accepted."),
 			type: 'string'
 		}
 	}
@@ -70,22 +70,28 @@ export const viewsContainersContribution: IJSONSchema = {
 
 export const viewsContainersExtensionPoint: IExtensionPoint<{ [loc: string]: IUserFriendlyViewsContainerDescriptor[] }> = ExtensionsRegistry.registerExtensionPoint<{ [loc: string]: IUserFriendlyViewsContainerDescriptor[] }>('viewsContainers', [], viewsContainersContribution);
 
-const CUSTOM_VIEW_CONTAINER_ORDER = 5;
+const TEST_VIEW_CONTAINER_ORDER = 6;
 
 class ViewsContainersExtensionHandler implements IWorkbenchContribution {
 
 	constructor() {
+		this.registerTestViewContainer();
 		this.handleAndRegisterCustomViewContainers();
+	}
+
+	private registerTestViewContainer(): void {
+		const id = 'test';
+		const title = localize('test', "Test");
+		const cssClass = `extensionViewlet-${id}`;
+		const icon = require.toUrl('./media/test.svg');
+
+		this.registerCustomViewlet({ id, title, icon }, TEST_VIEW_CONTAINER_ORDER, cssClass);
 	}
 
 	private handleAndRegisterCustomViewContainers() {
 		viewsContainersExtensionPoint.setHandler((extensions) => {
 			for (let extension of extensions) {
 				const { value, collector } = extension;
-				if (!extension.description.enableProposedApi) {
-					collector.error(localize({ key: 'proposed', comment: ['Contribution refers to those that an extension contributes to VS Code through an extension/contribution point. '] }, "'viewsContainers' contribution is only available when running out of dev or with the following command line switch: --enable-proposed-api {0}", extension.description.id));
-					continue;
-				}
 				forEach(value, entry => {
 					if (!this.isValidViewsContainer(entry.value, collector)) {
 						return;
@@ -108,11 +114,11 @@ class ViewsContainersExtensionHandler implements IWorkbenchContribution {
 
 		for (let descriptor of viewsContainersDescriptors) {
 			if (typeof descriptor.id !== 'string') {
-				collector.error(localize('requireidstring', "property `{0}` is mandatory and must be of type `string`. Allowed only alphanumeric letters, '_', '-'.", 'id'));
+				collector.error(localize('requireidstring', "property `{0}` is mandatory and must be of type `string`. Only alphanumeric characters, '_', and '-' are allowed.", 'id'));
 				return false;
 			}
 			if (!(/^[a-z0-9_-]+$/i.test(descriptor.id))) {
-				collector.error(localize('requireidstring', "property `{0}` is mandatory and must be of type `string`. Allowed only alphanumeric letters, '_', '-'.", 'id'));
+				collector.error(localize('requireidstring', "property `{0}` is mandatory and must be of type `string`. Only alphanumeric characters, '_', and '-' are allowed.", 'id'));
 				return false;
 			}
 			if (typeof descriptor.title !== 'string') {
@@ -131,62 +137,70 @@ class ViewsContainersExtensionHandler implements IWorkbenchContribution {
 	private registerCustomViewContainers(containers: IUserFriendlyViewsContainerDescriptor[], extension: IExtensionDescription) {
 		containers.forEach((descriptor, index) => {
 			const cssClass = `extensionViewlet-${descriptor.id}`;
-			const icon = join(extension.extensionFolderPath, descriptor.icon);
-			this.registerCustomViewlet({ id: descriptor.id, title: descriptor.title, icon }, CUSTOM_VIEW_CONTAINER_ORDER + index + 1, cssClass);
+			// TODO@extensionLocation
+			const icon = join(extension.extensionLocation.fsPath, descriptor.icon);
+			this.registerCustomViewlet({ id: descriptor.id, title: descriptor.title, icon }, TEST_VIEW_CONTAINER_ORDER + index + 1, cssClass);
 		});
 	}
 
 	private registerCustomViewlet(descriptor: IUserFriendlyViewsContainerDescriptor, order: number, cssClass: string): void {
+		const viewletRegistry = Registry.as<ViewletRegistry>(ViewletExtensions.Viewlets);
 		const id = `workbench.view.extension.${descriptor.id}`;
-		const location: ViewLocation = ViewLocation.register(id);
 
-		// Register as viewlet
-		class CustomViewlet extends PersistentViewsViewlet {
-			constructor(
-				@IPartService partService: IPartService,
-				@ITelemetryService telemetryService: ITelemetryService,
-				@IWorkspaceContextService contextService: IWorkspaceContextService,
-				@IStorageService storageService: IStorageService,
-				@IWorkbenchEditorService editorService: IWorkbenchEditorService,
-				@IInstantiationService instantiationService: IInstantiationService,
-				@IContextKeyService contextKeyService: IContextKeyService,
-				@IThemeService themeService: IThemeService,
-				@IContextMenuService contextMenuService: IContextMenuService,
-				@IExtensionService extensionService: IExtensionService
-			) {
-				super(id, location, `${id}.state`, true, partService, telemetryService, storageService, instantiationService, themeService, contextService, contextKeyService, contextMenuService, extensionService);
+		if (!viewletRegistry.getViewlet(id)) {
+
+			const location: ViewLocation = ViewLocation.register(id);
+
+			// Register as viewlet
+			class CustomViewlet extends PersistentViewsViewlet {
+				constructor(
+					@IPartService partService: IPartService,
+					@ITelemetryService telemetryService: ITelemetryService,
+					@IWorkspaceContextService contextService: IWorkspaceContextService,
+					@IStorageService storageService: IStorageService,
+					@IWorkbenchEditorService editorService: IWorkbenchEditorService,
+					@IInstantiationService instantiationService: IInstantiationService,
+					@IContextKeyService contextKeyService: IContextKeyService,
+					@IThemeService themeService: IThemeService,
+					@IContextMenuService contextMenuService: IContextMenuService,
+					@IExtensionService extensionService: IExtensionService
+				) {
+					super(id, location, `${id}.state`, true, partService, telemetryService, storageService, instantiationService, themeService, contextService, contextKeyService, contextMenuService, extensionService);
+				}
 			}
-		}
-		const viewletDescriptor = new ViewletDescriptor(
-			CustomViewlet,
-			id,
-			descriptor.title,
-			cssClass,
-			order
-		);
+			const viewletDescriptor = new ViewletDescriptor(
+				CustomViewlet,
+				id,
+				descriptor.title,
+				cssClass,
+				order,
+				descriptor.icon
+			);
 
-		Registry.as<ViewletRegistry>(ViewletExtensions.Viewlets).registerViewlet(viewletDescriptor);
+			viewletRegistry.registerViewlet(viewletDescriptor);
 
-		// Register Action to Open Viewlet
-		class OpenCustomViewletAction extends ToggleViewletAction {
-			constructor(
-				id: string, label: string,
-				@IViewletService viewletService: IViewletService,
-				@IWorkbenchEditorService editorService: IWorkbenchEditorService
-			) {
-				super(id, label, id, viewletService, editorService);
+			// Register Action to Open Viewlet
+			class OpenCustomViewletAction extends ToggleViewletAction {
+				constructor(
+					id: string, label: string,
+					@IViewletService viewletService: IViewletService,
+					@IWorkbenchEditorService editorService: IWorkbenchEditorService
+				) {
+					super(id, label, id, viewletService, editorService);
+				}
 			}
-		}
-		const registry = Registry.as<IWorkbenchActionRegistry>(ActionExtensions.WorkbenchActions);
-		registry.registerWorkbenchAction(
-			new SyncActionDescriptor(OpenCustomViewletAction, id, localize('showViewlet', "Show {0}", descriptor.title)),
-			'View: Show {0}',
-			localize('view', "View")
-		);
+			const registry = Registry.as<IWorkbenchActionRegistry>(ActionExtensions.WorkbenchActions);
+			registry.registerWorkbenchAction(
+				new SyncActionDescriptor(OpenCustomViewletAction, id, localize('showViewlet', "Show {0}", descriptor.title)),
+				'View: Show {0}',
+				localize('view', "View")
+			);
 
-		// Generate CSS to show the icon in the activity bar
-		const iconClass = `.monaco-workbench > .activitybar .monaco-action-bar .action-label.${cssClass}`;
-		createCSSRule(iconClass, `-webkit-mask: url('${descriptor.icon}') no-repeat 50% 50%;`);
+			// Generate CSS to show the icon in the activity bar
+			const iconClass = `.monaco-workbench > .activitybar .monaco-action-bar .action-label.${cssClass}`;
+			createCSSRule(iconClass, `-webkit-mask: url('${descriptor.icon}') no-repeat 50% 50%`);
+		}
+
 	}
 }
 

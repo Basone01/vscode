@@ -65,10 +65,10 @@ export abstract class ViewletPanel extends Panel {
 		this.actionRunner = options.actionRunner;
 	}
 
-	render(container: HTMLElement): void {
-		super.render(container);
+	render(): void {
+		super.render();
 
-		const focusTracker = trackFocus(container);
+		const focusTracker = trackFocus(this.element);
 		this.disposables.push(focusTracker);
 		this.disposables.push(focusTracker.onDidFocus(() => this._onDidFocus.fire()));
 	}
@@ -88,7 +88,7 @@ export abstract class ViewletPanel extends Panel {
 		});
 
 		this.disposables.push(this.toolbar);
-		this.updateActions();
+		this.setActions();
 
 		const onDidRelevantConfigurationChange = filterEvent(this.configurationService.onDidChangeConfiguration, e => e.affectsConfiguration(ViewletPanel.AlwaysShowActionsConfig));
 		onDidRelevantConfigurationChange(this.updateActionsVisibility, this, this.disposables);
@@ -100,18 +100,25 @@ export abstract class ViewletPanel extends Panel {
 	}
 
 	focus(): void {
-		this._onDidFocus.fire();
+		if (this.element) {
+			this.element.focus();
+			this._onDidFocus.fire();
+		}
+	}
+
+	private setActions(): void {
+		this.toolbar.setActions(prepareActions(this.getActions()), prepareActions(this.getSecondaryActions()))();
+		this.toolbar.context = this.getActionsContext();
+	}
+
+	private updateActionsVisibility(): void {
+		const shouldAlwaysShowActions = this.configurationService.getValue<boolean>('workbench.view.alwaysShowHeaderActions');
+		toggleClass(this.headerContainer, 'actions-always-visible', shouldAlwaysShowActions);
 	}
 
 	protected updateActions(): void {
-		this.toolbar.setActions(prepareActions(this.getActions()), prepareActions(this.getSecondaryActions()))();
-		this.toolbar.context = this.getActionsContext();
+		this.setActions();
 		this._onDidChangeTitleArea.fire();
-	}
-
-	protected updateActionsVisibility(): void {
-		const shouldAlwaysShowActions = this.configurationService.getValue<boolean>('workbench.view.alwaysShowHeaderActions');
-		toggleClass(this.headerContainer, 'actions-always-visible', shouldAlwaysShowActions);
 	}
 
 	getActions(): IAction[] {

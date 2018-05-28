@@ -23,7 +23,7 @@
 		"onCommand:markdown.showLockedPreviewToSide",
 		"onCommand:markdown.showSource",
 		"onCommand:markdown.showPreviewSecuritySelector",
-		"onView:markdown.preview"
+		"onWebviewPanel:markdown.preview"
 	],
 	"contributes": {
 		"commands": [
@@ -109,6 +109,13 @@
 				}
 			],
 			"explorer/context": [
+				{
+					"command": "markdown.showPreview",
+					"when": "resourceLangId == markdown",
+					"group": "navigation"
+				}
+			],
+			"editor/title/context": [
 				{
 					"command": "markdown.showPreview",
 					"when": "resourceLangId == markdown",
@@ -288,7 +295,7 @@
 		"highlight.js": "9.5.0",
 		"markdown-it": "^8.4.0",
 		"markdown-it-named-headers": "0.0.4",
-		"vscode-extension-telemetry": "0.0.16",
+		"vscode-extension-telemetry": "0.0.17",
 		"vscode-nls": "^3.2.1"
 	},
 	"devDependencies": {

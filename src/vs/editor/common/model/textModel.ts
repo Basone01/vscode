@@ -1143,6 +1143,21 @@ export class TextModel extends Disposable implements model.ITextModel {
 		this._commandManager.pushStackElement();
 	}
 
+	public pushEOL(eol: model.EndOfLineSequence): void {
+		const currentEOL = (this.getEOL() === '\n' ? model.EndOfLineSequence.LF : model.EndOfLineSequence.CRLF);
+		if (currentEOL === eol) {
+			return;
+		}
+		try {
+			this._onDidChangeDecorations.beginDeferredEmit();
+			this._eventEmitter.beginDeferredEmit();
+			this._commandManager.pushEOL(eol);
+		} finally {
+			this._eventEmitter.endDeferredEmit();
+			this._onDidChangeDecorations.endDeferredEmit();
+		}
+	}
+
 	public pushEditOperations(beforeCursorState: Selection[], editOperations: model.IIdentifiedSingleEditOperation[], cursorStateComputer: model.ICursorStateComputer): Selection[] {
 		try {
 			this._onDidChangeDecorations.beginDeferredEmit();
@@ -1210,6 +1225,14 @@ export class TextModel extends Disposable implements model.ITextModel {
 							&& editRange.isEmpty() && editText && editText.length > 0 && editText.charAt(0) === '\n'
 						) {
 							// This edit inserts a new line (and maybe other text) after `trimLine`
+							continue;
+						}
+
+						if (
+							trimLineNumber === editRange.startLineNumber && editRange.startColumn === 1
+							&& editRange.isEmpty() && editText && editText.length > 0 && editText.charAt(editText.length - 1) === '\n'
+						) {
+							// This edit inserts a new line (and maybe other text) before `trimLine`
 							continue;
 						}
 
@@ -2389,7 +2412,7 @@ export class TextModel extends Disposable implements model.ITextModel {
 		return TextModel.computeIndentLevel(this._buffer.getLineContent(lineIndex + 1), this._options.tabSize);
 	}
 
-	public getActiveIndentGuide(lineNumber: number): model.IActiveIndentGuideInfo {
+	public getActiveIndentGuide(lineNumber: number, minLineNumber: number, maxLineNumber: number): model.IActiveIndentGuideInfo {
 		this._assertNotDisposed();
 		const lineCount = this.getLineCount();
 
@@ -2482,10 +2505,15 @@ export class TextModel extends Disposable implements model.ITextModel {
 			const upLineNumber = lineNumber - distance;
 			const downLineNumber = lineNumber + distance;
 
-			if (upLineNumber < 1) {
+			if (upLineNumber < 1 || upLineNumber < minLineNumber) {
 				goUp = false;
 			}
-			if (downLineNumber > lineCount) {
+			if (downLineNumber > lineCount || downLineNumber > maxLineNumber) {
+				goDown = false;
+			}
+			if (distance > 50000) {
+				// stop processing
+				goUp = false;
 				goDown = false;
 			}
 
@@ -2729,7 +2757,7 @@ class DecorationsTrees {
 }
 
 function cleanClassName(className: string): string {
-	return className.replace(/[^a-z0-9\-]/gi, ' ');
+	return className.replace(/[^a-z0-9\-_]/gi, ' ');
 }
 
 export class ModelDecorationOverviewRulerOptions implements model.IModelDecorationOverviewRulerOptions {
