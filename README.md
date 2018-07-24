@@ -30,12 +30,28 @@ I had to fork VS Code to implement some features that would not be possible usin
     },
 	```
 
-**Demo:**
+## Demo
 
 ![Demo](https://i.imgur.com/wxV0gAu.gif)
 
 - Chords: `fun`&rarr;`function$1 () {}`, `con`&rarr;`console.log($1)`, `ret`&rarr;`return`, `fal`&rarr;`false`
 - Rainbow strings (`'Hello'`)
+
+## Building
+
+1. Clone this repository.
+
+2. Yarn.
+
+	```
+	yarn
+	```
+
+3. Build (for macOS).
+
+	```
+	yarn gulp vscode-darwin
+	```
 
 
 # Visual Studio Code - Open Source
