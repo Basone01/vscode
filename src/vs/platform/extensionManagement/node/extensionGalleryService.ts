@@ -9,7 +9,7 @@ import * as path from 'path';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { distinct } from 'vs/base/common/arrays';
 import { getErrorMessage, isPromiseCanceledError } from 'vs/base/common/errors';
-import { StatisticType, IGalleryExtension, IExtensionGalleryService, IGalleryExtensionAsset, IQueryOptions, SortBy, SortOrder, IExtensionManifest, IExtensionIdentifier, IReportedExtension, InstallOperation } from 'vs/platform/extensionManagement/common/extensionManagement';
+import { StatisticType, IGalleryExtension, IExtensionGalleryService, IGalleryExtensionAsset, IQueryOptions, SortBy, SortOrder, IExtensionManifest, IExtensionIdentifier, IReportedExtension, InstallOperation, ITranslation } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { getGalleryExtensionId, getGalleryExtensionTelemetryData, adoptToGalleryExtensionId } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
 import { assign, getOrDefault } from 'vs/base/common/objects';
 import { IRequestService } from 'vs/platform/request/node/request';
@@ -115,6 +115,7 @@ const AssetType = {
 
 const PropertyType = {
 	Dependency: 'Microsoft.VisualStudio.Code.ExtensionDependencies',
+	ExtensionPack: 'Microsoft.VisualStudio.Code.ExtensionPack',
 	Engine: 'Microsoft.VisualStudio.Code.Engine'
 };
 
@@ -201,6 +202,15 @@ function getStatistic(statistics: IRawGalleryExtensionStatistics[], name: string
 	return result ? result.value : 0;
 }
 
+function getCoreTranslationAssets(version: IRawGalleryExtensionVersion): { [languageId: string]: IGalleryExtensionAsset } {
+	const coreTranslationAssetPrefix = 'Microsoft.VisualStudio.Code.Translation.';
+	const result = version.files.filter(f => f.assetType.indexOf(coreTranslationAssetPrefix) === 0);
+	return result.reduce((result, file) => {
+		result[file.assetType.substring(coreTranslationAssetPrefix.length)] = getVersionAsset(version, file.assetType);
+		return result;
+	}, {});
+}
+
 function getVersionAsset(version: IRawGalleryExtensionVersion, type: string): IGalleryExtensionAsset {
 	const result = version.files.filter(f => f.assetType === type)[0];
 
@@ -253,8 +263,8 @@ function getVersionAsset(version: IRawGalleryExtensionVersion, type: string): IG
 	};
 }
 
-function getDependencies(version: IRawGalleryExtensionVersion): string[] {
-	const values = version.properties ? version.properties.filter(p => p.key === PropertyType.Dependency) : [];
+function getExtensions(version: IRawGalleryExtensionVersion, property: string): string[] {
+	const values = version.properties ? version.properties.filter(p => p.key === property) : [];
 	const value = values.length > 0 && values[0].value;
 	return value ? value.split(',').map(v => adoptToGalleryExtensionId(v)) : [];
 }
@@ -278,6 +288,7 @@ function toExtension(galleryExtension: IRawGalleryExtension, extensionsGalleryUr
 		icon: getVersionAsset(version, AssetType.Icon),
 		license: getVersionAsset(version, AssetType.License),
 		repository: getVersionAsset(version, AssetType.Repository),
+		coreTranslations: getCoreTranslationAssets(version)
 	};
 
 	return {
@@ -293,12 +304,13 @@ function toExtension(galleryExtension: IRawGalleryExtension, extensionsGalleryUr
 		publisher: galleryExtension.publisher.publisherName,
 		publisherDisplayName: galleryExtension.publisher.displayName,
 		description: galleryExtension.shortDescription || '',
-		installCount: getStatistic(galleryExtension.statistics, 'install'),
+		installCount: getStatistic(galleryExtension.statistics, 'install') + getStatistic(galleryExtension.statistics, 'updateCount'),
 		rating: getStatistic(galleryExtension.statistics, 'averagerating'),
 		ratingCount: getStatistic(galleryExtension.statistics, 'ratingcount'),
 		assets,
 		properties: {
-			dependencies: getDependencies(version),
+			dependencies: getExtensions(version, PropertyType.Dependency),
+			extensionPack: getExtensions(version, PropertyType.ExtensionPack),
 			engine: getEngine(version)
 		},
 		/* __GDPR__FRAGMENT__
@@ -362,7 +374,7 @@ export class ExtensionGalleryService implements IExtensionGalleryService {
 		/* __GDPR__
 			"galleryService:query" : {
 				"type" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-				"text": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+				"text": { "classification": "CustomerContent", "purpose": "FeatureInsight" }
 			}
 		*/
 		this.telemetryService.publicLog('galleryService:query', { type, text });
@@ -371,8 +383,7 @@ export class ExtensionGalleryService implements IExtensionGalleryService {
 			.withFlags(Flags.IncludeLatestVersionOnly, Flags.IncludeAssetUri, Flags.IncludeStatistics, Flags.IncludeFiles, Flags.IncludeVersionProperties)
 			.withPage(1, pageSize)
 			.withFilter(FilterType.Target, 'Microsoft.VisualStudio.Code')
-			.withFilter(FilterType.ExcludeWithFlags, flagsToString(Flags.Unpublished))
-			.withAssetTypes(AssetType.Icon, AssetType.License, AssetType.Details, AssetType.Manifest, AssetType.VSIX, AssetType.Changelog);
+			.withFilter(FilterType.ExcludeWithFlags, flagsToString(Flags.Unpublished));
 
 		if (text) {
 			// Use category filter instead of "category:themes"
@@ -516,6 +527,16 @@ export class ExtensionGalleryService implements IExtensionGalleryService {
 			.then(JSON.parse);
 	}
 
+	getCoreTranslation(extension: IGalleryExtension, languageId: string): TPromise<ITranslation> {
+		const asset = extension.assets.coreTranslations[languageId.toUpperCase()];
+		if (asset) {
+			return this.getAsset(asset)
+				.then(asText)
+				.then(JSON.parse);
+		}
+		return TPromise.as(null);
+	}
+
 	getChangelog(extension: IGalleryExtension): TPromise<string> {
 		return this.getAsset(extension.assets.changelog)
 			.then(asText);
@@ -549,7 +570,7 @@ export class ExtensionGalleryService implements IExtensionGalleryService {
 				return this.getLastValidExtensionVersion(rawExtension, rawExtension.versions)
 					.then(rawVersion => {
 						if (rawVersion) {
-							extension.properties.dependencies = getDependencies(rawVersion);
+							extension.properties.dependencies = getExtensions(rawVersion, PropertyType.Dependency);
 							extension.properties.engine = getEngine(rawVersion);
 							extension.assets.download = getVersionAsset(rawVersion, AssetType.VSIX);
 							extension.version = rawVersion.version;

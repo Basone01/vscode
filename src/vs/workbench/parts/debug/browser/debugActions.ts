@@ -16,7 +16,7 @@ import { IDebugService, State, ISession, IThread, IEnablement, IBreakpoint, ISta
 import { Variable, Expression, Thread, Breakpoint, Session } from 'vs/workbench/parts/debug/common/debugModel';
 import { IPartService } from 'vs/workbench/services/part/common/partService';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
-import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { TogglePanelAction } from 'vs/workbench/browser/panel';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
 import { INotificationService } from 'vs/platform/notification/common/notification';
@@ -136,12 +136,12 @@ export class StartAction extends AbstractDebugAction {
 	public run(): TPromise<any> {
 		const configurationManager = this.debugService.getConfigurationManager();
 		let launch = configurationManager.selectedConfiguration.launch;
-		if (!launch) {
+		if (!launch || launch.getConfigurationNames().length === 0) {
 			const rootUri = this.historyService.getLastActiveWorkspaceRoot();
 			launch = configurationManager.getLaunch(rootUri);
 			if (!launch || launch.getConfigurationNames().length === 0) {
 				const launches = configurationManager.getLaunches();
-				launch = first(launches, l => !!l.getConfigurationNames().length, launches.length ? launches[0] : launch);
+				launch = first(launches, l => !!l.getConfigurationNames().length, launch);
 			}
 
 			configurationManager.selectConfiguration(launch);
@@ -156,19 +156,11 @@ export class StartAction extends AbstractDebugAction {
 
 	public static isEnabled(debugService: IDebugService, contextService: IWorkspaceContextService, configName: string) {
 		const sessions = debugService.getModel().getSessions();
-		const launch = debugService.getConfigurationManager().selectedConfiguration.launch;
 
 		if (debugService.state === State.Initializing) {
 			return false;
 		}
 		if (contextService && contextService.getWorkbenchState() === WorkbenchState.EMPTY && sessions.length > 0) {
-			return false;
-		}
-		if (sessions.some(p => p.getName(false) === configName && (!launch || !launch.workspace || !p.raw.root || p.raw.root.uri.toString() === launch.workspace.uri.toString()))) {
-			return false;
-		}
-		const compound = launch && launch.getCompound(configName);
-		if (compound && compound.configurations && sessions.some(p => compound.configurations.indexOf(p.getName(false)) !== -1)) {
 			return false;
 		}
 
@@ -770,7 +762,7 @@ export class FocusSessionAction extends AbstractDebugAction {
 	constructor(id: string, label: string,
 		@IDebugService debugService: IDebugService,
 		@IKeybindingService keybindingService: IKeybindingService,
-		@IWorkbenchEditorService private editorService: IWorkbenchEditorService
+		@IEditorService private editorService: IEditorService
 	) {
 		super(id, label, null, debugService, keybindingService, 100);
 	}

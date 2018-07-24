@@ -75,12 +75,14 @@ export class QueryBuilder {
 			this.resolveSmartCaseToCaseSensitive(contentPattern);
 		}
 
-		const query = <ISearchQuery>{
+		const query: ISearchQuery = {
 			type,
 			folderQueries,
 			usingSearchPaths: !!(searchPaths && searchPaths.length),
 			extraFileResources: options.extraFileResources,
-			filePattern: options.filePattern,
+			filePattern: options.filePattern
+				? options.filePattern.trim()
+				: options.filePattern,
 			excludePattern,
 			includePattern,
 			maxResults: options.maxResults,
@@ -277,7 +279,7 @@ export class QueryBuilder {
 			const relativeSearchPathMatch = searchPath.match(/\.[\/\\]([^\/\\]+)([\/\\].+)?/);
 			if (relativeSearchPathMatch) {
 				const searchPathRoot = relativeSearchPathMatch[1];
-				const matchingRoots = this.workspaceContextService.getWorkspace().folders.filter(folder => paths.basename(folder.uri.fsPath) === searchPathRoot);
+				const matchingRoots = this.workspaceContextService.getWorkspace().folders.filter(folder => paths.basename(folder.uri.fsPath) === searchPathRoot || folder.name === searchPathRoot);
 				if (matchingRoots.length) {
 					return matchingRoots.map(root => {
 						return relativeSearchPathMatch[2] ?

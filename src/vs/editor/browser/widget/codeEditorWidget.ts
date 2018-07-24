@@ -46,11 +46,13 @@ import { IMouseEvent } from 'vs/base/browser/mouseEvent';
 import { InternalEditorAction } from 'vs/editor/common/editorAction';
 import { ICommandDelegate } from 'vs/editor/browser/view/viewController';
 import { CoreEditorCommand } from 'vs/editor/browser/controller/coreCommands';
-import { editorErrorForeground, editorErrorBorder, editorWarningForeground, editorWarningBorder, editorInfoBorder, editorInfoForeground, editorHintForeground, editorHintBorder, editorUnnecessaryForeground } from 'vs/editor/common/view/editorColorRegistry';
+import { editorErrorForeground, editorErrorBorder, editorWarningForeground, editorWarningBorder, editorInfoBorder, editorInfoForeground, editorHintForeground, editorHintBorder, editorUnnecessaryCodeOpacity, editorUnnecessaryCodeBorder } from 'vs/editor/common/view/editorColorRegistry';
 import { Color } from 'vs/base/common/color';
 import { ClassName } from 'vs/editor/common/model/intervalTree';
 
 let EDITOR_ID = 0;
+
+const SHOW_UNUSED_ENABLED_CLASS = 'showUnused';
 
 export interface ICodeEditorWidgetOptions {
 	/**
@@ -226,6 +228,11 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 
 			if (e.layoutInfo) {
 				this._onDidLayoutChange.fire(this._configuration.editor.layoutInfo);
+			}
+			if (this._configuration.editor.showUnused) {
+				this.domElement.classList.add(SHOW_UNUSED_ENABLED_CLASS);
+			} else {
+				this.domElement.classList.remove(SHOW_UNUSED_ENABLED_CLASS);
 			}
 		}));
 
@@ -1349,22 +1356,22 @@ export class CodeEditorWidget extends Disposable implements editorBrowser.ICodeE
 		if (this.isSimpleWidget) {
 			commandDelegate = {
 				paste: (source: string, text: string, pasteOnNewLine: boolean, multicursorText: string[]) => {
-					this.cursor.trigger(source, editorCommon.Handler.Paste, { text, pasteOnNewLine, multicursorText });
+					this.trigger(source, editorCommon.Handler.Paste, { text, pasteOnNewLine, multicursorText });
 				},
 				type: (source: string, text: string) => {
-					this.cursor.trigger(source, editorCommon.Handler.Type, { text });
+					this.trigger(source, editorCommon.Handler.Type, { text });
 				},
 				replacePreviousChar: (source: string, text: string, replaceCharCnt: number) => {
-					this.cursor.trigger(source, editorCommon.Handler.ReplacePreviousChar, { text, replaceCharCnt });
+					this.trigger(source, editorCommon.Handler.ReplacePreviousChar, { text, replaceCharCnt });
 				},
 				compositionStart: (source: string) => {
-					this.cursor.trigger(source, editorCommon.Handler.CompositionStart, undefined);
+					this.trigger(source, editorCommon.Handler.CompositionStart, undefined);
 				},
 				compositionEnd: (source: string) => {
-					this.cursor.trigger(source, editorCommon.Handler.CompositionEnd, undefined);
+					this.trigger(source, editorCommon.Handler.CompositionEnd, undefined);
 				},
 				cut: (source: string) => {
-					this.cursor.trigger(source, editorCommon.Handler.Cut, undefined);
+					this.trigger(source, editorCommon.Handler.Cut, undefined);
 				}
 			};
 		} else {
@@ -1796,8 +1803,13 @@ registerThemingParticipant((theme, collector) => {
 		collector.addRule(`.monaco-editor .${ClassName.EditorHintDecoration} { background: url("data:image/svg+xml,${getDotDotDotSVGData(hintForeground)}") no-repeat bottom left; }`);
 	}
 
-	const unnecessaryForeground = theme.getColor(editorUnnecessaryForeground);
+	const unnecessaryForeground = theme.getColor(editorUnnecessaryCodeOpacity);
 	if (unnecessaryForeground) {
-		collector.addRule(`.monaco-editor .${ClassName.EditorUnnecessaryDecoration} { color: ${unnecessaryForeground}; }`);
+		collector.addRule(`.${SHOW_UNUSED_ENABLED_CLASS} .monaco-editor .${ClassName.EditorUnnecessaryInlineDecoration} { opacity: ${unnecessaryForeground.rgba.a}; }`);
+	}
+
+	const unnecessaryBorder = theme.getColor(editorUnnecessaryCodeBorder);
+	if (unnecessaryBorder) {
+		collector.addRule(`.${SHOW_UNUSED_ENABLED_CLASS} .monaco-editor .${ClassName.EditorUnnecessaryDecoration} { border-bottom: 2px dashed ${unnecessaryBorder}; }`);
 	}
 });

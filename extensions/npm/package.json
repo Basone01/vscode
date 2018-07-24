@@ -20,7 +20,7 @@
     "jsonc-parser": "^1.0.0",
     "minimatch": "^3.0.4",
     "request-light": "^0.2.2",
-    "vscode-nls": "^3.2.1"
+    "vscode-nls": "^3.2.4"
   },
   "devDependencies": {
     "@types/minimatch": "^3.0.3",
@@ -33,6 +33,14 @@
     "onView:npm"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "ignore",
+        "filenames": [
+          ".npmignore"
+        ]
+      }
+    ],
     "views": {
       "explorer": [
         {
@@ -64,6 +72,10 @@
         "title": "%command.openScript%"
       },
       {
+        "command": "npm.runInstall",
+        "title": "%command.runInstall%"
+      },
+      {
         "command": "npm.refresh",
         "title": "%command.refresh%",
         "icon": {
@@ -73,6 +85,28 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "npm.refresh",
+          "when": "false"
+        },
+        {
+          "command": "npm.runScript",
+          "when": "false"
+        },
+        {
+          "command": "npm.debugScript",
+          "when": "false"
+        },
+        {
+          "command": "npm.openScript",
+          "when": "false"
+        },
+        {
+          "command": "npm.runInstall",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "npm.refresh",
@@ -84,7 +118,12 @@
         {
           "command": "npm.openScript",
           "when": "view == npm && viewItem == packageJSON",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "npm.runInstall",
+          "when": "view == npm && viewItem == packageJSON",
+          "group": "navigation@2"
         },
         {
           "command": "npm.openScript",
@@ -138,6 +177,12 @@
           "default": false,
           "scope": "resource",
           "description": "%config.npm.runSilent%"
+        },
+        "npm.scriptCodeLens.enable": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "%config.scriptCodeLens.enable%"
         },
         "npm.packageManager": {
           "scope": "resource",

@@ -20,6 +20,7 @@ export interface ColorContribution {
 	readonly description: string;
 	readonly defaults: ColorDefaults;
 	readonly needsTransparency: boolean;
+	readonly deprecationMessage: string;
 }
 
 
@@ -87,7 +88,7 @@ class ColorRegistry implements IColorRegistry {
 	}
 
 	public registerColor(id: string, defaults: ColorDefaults, description: string, needsTransparency = false, deprecationMessage?: string): ColorIdentifier {
-		let colorContribution = { id, description, defaults, needsTransparency };
+		let colorContribution: ColorContribution = { id, description, defaults, needsTransparency, deprecationMessage };
 		this.colorsById[id] = colorContribution;
 		let propertySchema: IJSONSchema = { type: 'string', description, format: 'color-hex', default: '#ff0000' };
 		if (deprecationMessage) {
@@ -176,7 +177,7 @@ export const inputBackground = registerColor('input.background', { dark: '#3C3C3
 export const inputForeground = registerColor('input.foreground', { dark: foreground, light: foreground, hc: foreground }, nls.localize('inputBoxForeground', "Input box foreground."));
 export const inputBorder = registerColor('input.border', { dark: null, light: null, hc: contrastBorder }, nls.localize('inputBoxBorder', "Input box border."));
 export const inputActiveOptionBorder = registerColor('inputOption.activeBorder', { dark: '#007ACC', light: '#007ACC', hc: activeContrastBorder }, nls.localize('inputBoxActiveOptionBorder', "Border color of activated options in input fields."));
-export const inputPlaceholderForeground = registerColor('input.placeholderForeground', { dark: null, light: null, hc: null }, nls.localize('inputPlaceholderForeground', "Input box foreground color for placeholder text."));
+export const inputPlaceholderForeground = registerColor('input.placeholderForeground', { light: transparent(foreground, 0.5), dark: transparent(foreground, 0.5), hc: transparent(foreground, 0.7) }, nls.localize('inputPlaceholderForeground', "Input box foreground color for placeholder text."));
 
 export const inputValidationInfoBackground = registerColor('inputValidation.infoBackground', { dark: '#063B49', light: '#D6ECF2', hc: Color.black }, nls.localize('inputValidationInfoBackground', "Input validation background color for information severity."));
 export const inputValidationInfoBorder = registerColor('inputValidation.infoBorder', { dark: '#007acc', light: '#007acc', hc: contrastBorder }, nls.localize('inputValidationInfoBorder', "Input validation border color for information severity."));
@@ -196,7 +197,7 @@ export const listActiveSelectionBackground = registerColor('list.activeSelection
 export const listActiveSelectionForeground = registerColor('list.activeSelectionForeground', { dark: Color.white, light: Color.white, hc: null }, nls.localize('listActiveSelectionForeground', "List/Tree foreground color for the selected item when the list/tree is active. An active list/tree has keyboard focus, an inactive does not."));
 export const listInactiveSelectionBackground = registerColor('list.inactiveSelectionBackground', { dark: '#3F3F46', light: '#CCCEDB', hc: null }, nls.localize('listInactiveSelectionBackground', "List/Tree background color for the selected item when the list/tree is inactive. An active list/tree has keyboard focus, an inactive does not."));
 export const listInactiveSelectionForeground = registerColor('list.inactiveSelectionForeground', { dark: null, light: null, hc: null }, nls.localize('listInactiveSelectionForeground', "List/Tree foreground color for the selected item when the list/tree is inactive. An active list/tree has keyboard focus, an inactive does not."));
-export const listInactiveFocusBackground = registerColor('list.inactiveFocusBackground', { dark: '#313135', light: '#d8dae6', hc: null }, nls.localize('listInactiveSelectionBackground', "List/Tree background color for the selected item when the list/tree is inactive. An active list/tree has keyboard focus, an inactive does not."));
+export const listInactiveFocusBackground = registerColor('list.inactiveFocusBackground', { dark: '#313135', light: '#d8dae6', hc: null }, nls.localize('listInactiveFocusBackground', "List/Tree background color for the focused item when the list/tree is inactive. An active list/tree has keyboard focus, an inactive does not."));
 export const listHoverBackground = registerColor('list.hoverBackground', { dark: '#2A2D2E', light: '#F0F0F0', hc: null }, nls.localize('listHoverBackground', "List/Tree background when hovering over items using the mouse."));
 export const listHoverForeground = registerColor('list.hoverForeground', { dark: null, light: null, hc: null }, nls.localize('listHoverForeground', "List/Tree foreground when hovering over items using the mouse."));
 export const listDropBackground = registerColor('list.dropBackground', { dark: listFocusBackground, light: listFocusBackground, hc: null }, nls.localize('listDropBackground', "List/Tree drag and drop background when moving items around using the mouse."));
@@ -222,6 +223,11 @@ export const scrollbarSliderActiveBackground = registerColor('scrollbarSlider.ac
 
 export const progressBarBackground = registerColor('progressBar.background', { dark: Color.fromHex('#0E70C0'), light: Color.fromHex('#0E70C0'), hc: contrastBorder }, nls.localize('progressBarBackground', "Background color of the progress bar that can show for long running operations."));
 
+export const breadcrumbsForeground = registerColor('breadcrumb.breadcrumbsForeground', { light: Color.fromHex('#6C6C6C').transparent(.7), dark: Color.fromHex('#CCCCCC').transparent(.7), hc: Color.white.transparent(.7) }, nls.localize('breadcrumbsFocusForeground', "Color of focused breadcrumb items."));
+export const breadcrumbsFocusForeground = registerColor('breadcrumb.breadcrumbsFocusForeground', { light: '#6C6C6C', dark: '#CCCCCC', hc: Color.white }, nls.localize('breadcrumbsFocusForeground', "Color of focused breadcrumb items."));
+export const breadcrumbsActiveSelectionForeground = registerColor('breadcrumb.breadcrumbsActiveSelectionForeground', { light: '#6C6C6C', dark: '#CCCCCC', hc: Color.white }, nls.localize('breadcrumbsSelectedForegound', "Color of selected breadcrumb items."));
+export const breadcrumbsPickerBackground = registerColor('breadcrumb.breadcrumbsPickerBackground', { light: '#ECECEC', dark: '#252526', hc: Color.black }, nls.localize('breadcrumbsSelectedBackground', "Background color of breadcrumb item picker."));
+
 /**
  * Editor background color.
  * Because of bug https://monacotools.visualstudio.com/DefaultCollection/Monaco/_workitems/edit/13254
@@ -240,6 +246,7 @@ export const editorForeground = registerColor('editor.foreground', { light: '#33
 export const editorWidgetBackground = registerColor('editorWidget.background', { dark: '#2D2D30', light: '#EFEFF2', hc: '#0C141F' }, nls.localize('editorWidgetBackground', 'Background color of editor widgets, such as find/replace.'));
 export const editorWidgetBorder = registerColor('editorWidget.border', { dark: '#454545', light: '#C8C8C8', hc: contrastBorder }, nls.localize('editorWidgetBorder', 'Border color of editor widgets. The color is only used if the widget chooses to have a border and if the color is not overridden by a widget.'));
 
+export const editorWidgetResizeBorder = registerColor('editorWidget.resizeBorder', { light: null, dark: null, hc: null }, nls.localize('editorWidgetResizeBorder', "Border color of the resize bar of editor widgets. The color is only used if the widget chooses to have a resize border and if the color is not overridden by a widget."));
 
 /**
  * Editor selection colors.
@@ -260,12 +267,6 @@ export const editorFindRangeHighlight = registerColor('editor.findRangeHighlight
 export const editorFindMatchBorder = registerColor('editor.findMatchBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('editorFindMatchBorder', "Border color of the current search match."));
 export const editorFindMatchHighlightBorder = registerColor('editor.findMatchHighlightBorder', { light: null, dark: null, hc: activeContrastBorder }, nls.localize('findMatchHighlightBorder', "Border color of the other search matches."));
 export const editorFindRangeHighlightBorder = registerColor('editor.findRangeHighlightBorder', { dark: null, light: null, hc: transparent(activeContrastBorder, 0.4) }, nls.localize('findRangeHighlightBorder', "Border color of the range limiting the search. The color must not be opaque to not hide underlying decorations."), true);
-
-/**
- * Editor Find Widget
- */
-
-export const findWidgetResizeBorderBackground = registerColor('editor.findWidgetResizeBorder', { light: null, dark: null, hc: null }, nls.localize('findWidgetResizeBorder', "Border color of the resize bar of find widget."));
 
 /**
  * Editor hover
@@ -290,6 +291,8 @@ export const diffRemoved = registerColor('diffEditor.removedTextBackground', { d
 
 export const diffInsertedOutline = registerColor('diffEditor.insertedTextBorder', { dark: null, light: null, hc: '#33ff2eff' }, nls.localize('diffEditorInsertedOutline', 'Outline color for the text that got inserted.'));
 export const diffRemovedOutline = registerColor('diffEditor.removedTextBorder', { dark: null, light: null, hc: '#FF008F' }, nls.localize('diffEditorRemovedOutline', 'Outline color for text that got removed.'));
+
+export const diffBorder = registerColor('diffEditor.border', { dark: null, light: null, hc: contrastBorder }, nls.localize('diffEditorBorder', 'Border color between the two text editors.'));
 
 /**
  * Merge-conflict colors

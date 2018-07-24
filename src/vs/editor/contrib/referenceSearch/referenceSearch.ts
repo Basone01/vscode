@@ -9,21 +9,26 @@ import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { IContextKeyService, ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
 import { KeybindingsRegistry } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { Position } from 'vs/editor/common/core/position';
+import { Position, IPosition } from 'vs/editor/common/core/position';
 import * as editorCommon from 'vs/editor/common/editorCommon';
 import { registerEditorAction, ServicesAccessor, EditorAction, registerEditorContribution, registerDefaultLanguageCommand } from 'vs/editor/browser/editorExtensions';
 import { Location, ReferenceProviderRegistry } from 'vs/editor/common/modes';
+import { Range } from 'vs/editor/common/core/range';
 import { PeekContext, getOuterEditor } from './peekViewWidget';
 import { ReferencesController, RequestOptions, ctxReferenceSearchVisible } from './referencesController';
 import { ReferencesModel, OneReference } from './referencesModel';
-import { asWinJsPromise } from 'vs/base/common/async';
+import { asWinJsPromise, createCancelablePromise } from 'vs/base/common/async';
 import { onUnexpectedExternalError } from 'vs/base/common/errors';
 import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { EmbeddedCodeEditorWidget } from 'vs/editor/browser/widget/embeddedCodeEditorWidget';
-import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
+import { ICodeEditor, isCodeEditor } from 'vs/editor/browser/editorBrowser';
 import { ITextModel } from 'vs/editor/common/model';
 import { IListService } from 'vs/platform/list/browser/listService';
 import { ctxReferenceWidgetSearchTreeFocused } from 'vs/editor/contrib/referenceSearch/referencesWidget';
+import { CommandsRegistry, ICommandHandler } from 'vs/platform/commands/common/commands';
+import URI from 'vs/base/common/uri';
+import { ICodeEditorService } from 'vs/editor/browser/services/codeEditorService';
+import { CancellationToken } from 'vs/base/common/cancellation';
 
 export const defaultReferenceSearchOptions: RequestOptions = {
 	getMetaTitle(model) {
@@ -81,7 +86,7 @@ export class ReferenceAction extends EditorAction {
 		}
 		let range = editor.getSelection();
 		let model = editor.getModel();
-		let references = provideReferences(model, range.getStartPosition()).then(references => new ReferencesModel(references));
+		let references = createCancelablePromise(token => provideReferences(model, range.getStartPosition(), token).then(references => new ReferencesModel(references)));
 		controller.toggleWidget(range, references, defaultReferenceSearchOptions);
 	}
 }
@@ -89,6 +94,74 @@ export class ReferenceAction extends EditorAction {
 registerEditorContribution(ReferenceController);
 
 registerEditorAction(ReferenceAction);
+
+let findReferencesCommand: ICommandHandler = (accessor: ServicesAccessor, resource: URI, position: IPosition) => {
+	if (!(resource instanceof URI)) {
+		throw new Error('illegal argument, uri');
+	}
+	if (!position) {
+		throw new Error('illegal argument, position');
+	}
+
+	const codeEditorService = accessor.get(ICodeEditorService);
+	return codeEditorService.openCodeEditor({ resource }, codeEditorService.getFocusedCodeEditor()).then(control => {
+		if (!isCodeEditor(control)) {
+			return undefined;
+		}
+
+		let controller = ReferencesController.get(control);
+		if (!controller) {
+			return undefined;
+		}
+
+		let references = createCancelablePromise(token => provideReferences(control.getModel(), Position.lift(position), token).then(references => new ReferencesModel(references)));
+		let range = new Range(position.lineNumber, position.column, position.lineNumber, position.column);
+		return TPromise.as(controller.toggleWidget(range, references, defaultReferenceSearchOptions));
+	});
+};
+
+let showReferencesCommand: ICommandHandler = (accessor: ServicesAccessor, resource: URI, position: IPosition, references: Location[]) => {
+	if (!(resource instanceof URI)) {
+		throw new Error('illegal argument, uri expected');
+	}
+
+	const codeEditorService = accessor.get(ICodeEditorService);
+	return codeEditorService.openCodeEditor({ resource }, codeEditorService.getFocusedCodeEditor()).then(control => {
+		if (!isCodeEditor(control)) {
+			return undefined;
+		}
+
+		let controller = ReferencesController.get(control);
+		if (!controller) {
+			return undefined;
+		}
+
+		return TPromise.as(controller.toggleWidget(
+			new Range(position.lineNumber, position.column, position.lineNumber, position.column),
+			createCancelablePromise(_ => Promise.resolve(new ReferencesModel(references))),
+			defaultReferenceSearchOptions)).then(() => true);
+	});
+};
+
+// register commands
+
+CommandsRegistry.registerCommand({
+	id: 'editor.action.findReferences',
+	handler: findReferencesCommand
+});
+
+CommandsRegistry.registerCommand({
+	id: 'editor.action.showReferences',
+	handler: showReferencesCommand,
+	description: {
+		description: 'Show references at a position in a file',
+		args: [
+			{ name: 'uri', description: 'The text document in which to show references', constraint: URI },
+			{ name: 'position', description: 'The position at which to show', constraint: Position.isIPosition },
+			{ name: 'locations', description: 'An array of locations.', constraint: Array },
+		]
+	}
+});
 
 function closeActiveReferenceSearch(accessor: ServicesAccessor, args: any) {
 	withController(accessor, controller => controller.closeWidget());
@@ -194,7 +267,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	handler: openReferenceToSide
 });
 
-export function provideReferences(model: ITextModel, position: Position): TPromise<Location[]> {
+export function provideReferences(model: ITextModel, position: Position, token: CancellationToken): Promise<Location[]> {
 
 	// collect references from all providers
 	const promises = ReferenceProviderRegistry.ordered(model).map(provider => {
@@ -210,7 +283,7 @@ export function provideReferences(model: ITextModel, position: Position): TPromi
 		});
 	});
 
-	return TPromise.join(promises).then(references => {
+	return Promise.all(promises).then(references => {
 		let result: Location[] = [];
 		for (let ref of references) {
 			if (ref) {
@@ -221,4 +294,4 @@ export function provideReferences(model: ITextModel, position: Position): TPromi
 	});
 }
 
-registerDefaultLanguageCommand('_executeReferenceProvider', provideReferences);
+registerDefaultLanguageCommand('_executeReferenceProvider', (model, position) => provideReferences(model, position, CancellationToken.None));

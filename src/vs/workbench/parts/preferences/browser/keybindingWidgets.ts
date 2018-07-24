@@ -198,16 +198,13 @@ export class DefineKeybindingWidget extends Widget {
 
 	printExisting(numberOfExisting: number): void {
 		if (numberOfExisting > 0) {
-			let outputString: string = nls.localize('defineKeybinding.existing', "Existing");
-			outputString = numberOfExisting + ' ' + outputString;
-			let textNode = document.createTextNode(outputString);
-			let textSpan = document.createElement('span');
-			dom.addClass(textSpan, 'existingText');
-			textSpan.appendChild(textNode);
-			this._showExistingKeybindingsNode.appendChild(textSpan);
-			textSpan.onmousedown = (e) => { e.preventDefault(); };
-			textSpan.onmouseup = (e) => { e.preventDefault(); };
-			textSpan.onclick = () => { this._onShowExistingKeybindings.fire(this.getUserSettingsLabel()); };
+			const existingElement = dom.$('span.existingText');
+			const text = numberOfExisting === 1 ? nls.localize('defineKeybinding.oneExists', "1 existing command has this keybinding", numberOfExisting) : nls.localize('defineKeybinding.existing', "{0} existing commands have this keybinding", numberOfExisting);
+			dom.append(existingElement, document.createTextNode(text));
+			this._showExistingKeybindingsNode.appendChild(existingElement);
+			existingElement.onmousedown = (e) => { e.preventDefault(); };
+			existingElement.onmouseup = (e) => { e.preventDefault(); };
+			existingElement.onclick = () => { this._onShowExistingKeybindings.fire(this.getUserSettingsLabel()); };
 		}
 	}
 
@@ -217,7 +214,9 @@ export class DefineKeybindingWidget extends Widget {
 		this._domNode.setClassName('defineKeybindingWidget');
 		this._domNode.setWidth(DefineKeybindingWidget.WIDTH);
 		this._domNode.setHeight(DefineKeybindingWidget.HEIGHT);
-		dom.append(this._domNode.domNode, dom.$('.message', null, nls.localize('defineKeybinding.initial', "Press desired key combination and then press ENTER.")));
+
+		const message = nls.localize('defineKeybinding.initial', "Press desired key combination and then press ENTER.");
+		dom.append(this._domNode.domNode, dom.$('.message', null, message));
 
 		this._register(attachStylerCallback(this.themeService, { editorWidgetBackground, widgetShadow }, colors => {
 			if (colors.editorWidgetBackground) {
@@ -233,7 +232,7 @@ export class DefineKeybindingWidget extends Widget {
 			}
 		}));
 
-		this._keybindingInputWidget = this._register(this.instantiationService.createInstance(KeybindingInputWidget, this._domNode.domNode, {}));
+		this._keybindingInputWidget = this._register(this.instantiationService.createInstance(KeybindingInputWidget, this._domNode.domNode, { ariaLabel: message }));
 		this._register(this._keybindingInputWidget.onKeybinding(keybinding => this.onKeybinding(keybinding)));
 		this._register(this._keybindingInputWidget.onEnter(() => this.hide()));
 		this._register(this._keybindingInputWidget.onEscape(() => this.onCancel()));

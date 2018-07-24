@@ -705,7 +705,7 @@ export class ReferenceWidget extends PeekViewWidget {
 		this._preview.layout();
 	}
 
-	public setSelection(selection: OneReference): TPromise<any> {
+	public setSelection(selection: OneReference): Promise<any> {
 		return this._revealReference(selection, true).then(() => {
 
 			// show in tree
@@ -776,11 +776,11 @@ export class ReferenceWidget extends PeekViewWidget {
 		return undefined;
 	}
 
-	private async _revealReference(reference: OneReference, revealParent: boolean): TPromise<void> {
+	private async _revealReference(reference: OneReference, revealParent: boolean): Promise<void> {
 
 		// Update widget header
 		if (reference.uri.scheme !== Schemas.inMemory) {
-			this.setTitle(reference.name, getPathLabel(reference.directory, this._contextService, this._environmentService));
+			this.setTitle(reference.name, getPathLabel(reference.directory, this._environmentService, this._contextService));
 		} else {
 			this.setTitle(nls.localize('peekView.alternateTitle', "References"));
 		}

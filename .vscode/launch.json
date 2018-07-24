@@ -18,7 +18,7 @@
 			"name": "Attach to Extension Host",
 			"protocol": "inspector",
 			"port": 5870,
-			// "restart": true,
+			"restart": true,
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
 			]
@@ -202,6 +202,7 @@
 				"runtimeExecutable": "${workspaceFolder}/.build/electron/code-oss"
 			},
 			"stopOnEntry": false,
+			"outputCapture": "std",
 			"args": [
 				"--delay",
 				"--timeout",
@@ -235,6 +236,15 @@
 				"VSCODE_DEV": "1",
 				"VSCODE_CLI": "1"
 			}
+		},
+		{
+			"name": "Launch Built-in Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceRoot}/extensions/debug-auto-launch"
+			]
 		}
 	],
 	"compounds": [

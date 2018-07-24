@@ -42,6 +42,7 @@ import * as strings from 'vs/base/common/strings';
 import { RPCProtocol } from 'vs/workbench/services/extensions/node/rpcProtocol';
 import { INotificationService, Severity } from 'vs/platform/notification/common/notification';
 import { isFalsyOrEmpty } from 'vs/base/common/arrays';
+import { Schemas } from 'vs/base/common/network';
 
 let _SystemExtensionsRoot: string = null;
 function getSystemExtensionsRoot(): string {
@@ -182,7 +183,11 @@ export class ExtensionHostProcessManager extends Disposable {
 		}
 
 		this._extensionHostProcessRPCProtocol = new RPCProtocol(protocol);
-		const extHostContext: IExtHostContext = this._extensionHostProcessRPCProtocol;
+		const extHostContext: IExtHostContext = {
+			getProxy: <T>(identifier: ProxyIdentifier<T>): T => this._extensionHostProcessRPCProtocol.getProxy(identifier),
+			set: <T, R extends T>(identifier: ProxyIdentifier<T>, instance: R): R => this._extensionHostProcessRPCProtocol.set(identifier, instance),
+			assertRegistered: (identifiers: ProxyIdentifier<any>[]): void => this._extensionHostProcessRPCProtocol.assertRegistered(identifiers),
+		};
 
 		// Named customers
 		const namedCustomers = ExtHostCustomersRegistry.getNamedCustomers();
@@ -231,6 +236,7 @@ export class ExtensionHostProcessManager extends Disposable {
 }
 
 export class ExtensionService extends Disposable implements IExtensionService {
+
 	public _serviceBrand: any;
 
 	private readonly _onDidRegisterExtensions: Emitter<void>;
@@ -275,8 +281,13 @@ export class ExtensionService extends Disposable implements IExtensionService {
 
 		this.startDelayed(lifecycleService);
 
-		if (this._environmentService.disableExtensions) {
-			this._notificationService.info(nls.localize('extensionsDisabled', "All extensions are disabled."));
+		if (this._extensionEnablementService.allUserExtensionsDisabled) {
+			this._notificationService.prompt(Severity.Info, nls.localize('extensionsDisabled', "All installed extensions are temporarily disabled. Reload the window to return to the previous state."), [{
+				label: nls.localize('Reload', "Reload"),
+				run: () => {
+					this._windowService.reloadWindow();
+				}
+			}]);
 		}
 	}
 
@@ -476,9 +487,10 @@ export class ExtensionService extends Disposable implements IExtensionService {
 
 	private _scanAndHandleExtensions(): void {
 
-		this._getRuntimeExtensions()
-			.then(runtimeExtensons => {
-				this._registry = new ExtensionDescriptionRegistry(runtimeExtensons);
+		this._scanExtensions()
+			.then(allExtensions => this._getRuntimeExtensions(allExtensions))
+			.then(allExtensions => {
+				this._registry = new ExtensionDescriptionRegistry(allExtensions);
 
 				let availableExtensions = this._registry.getAllExtensionDescriptions();
 				let extensionPoints = ExtensionsRegistry.getExtensionPoints();
@@ -496,100 +508,113 @@ export class ExtensionService extends Disposable implements IExtensionService {
 			});
 	}
 
-	private _getRuntimeExtensions(): TPromise<IExtensionDescription[]> {
+	private _scanExtensions(): TPromise<IExtensionDescription[]> {
 		const log = new Logger((severity, source, message) => {
 			this._logOrShowMessage(severity, this._isDev ? messageWithSource(source, message) : message);
 		});
 
-		return ExtensionService._scanInstalledExtensions(this._windowService, this._notificationService, this._environmentService, log)
+		return ExtensionService._scanInstalledExtensions(this._windowService, this._notificationService, this._environmentService, this._extensionEnablementService, log)
 			.then(({ system, user, development }) => {
-				return this._extensionEnablementService.getDisabledExtensions()
-					.then(disabledExtensions => {
-						let result: { [extensionId: string]: IExtensionDescription; } = {};
-						let extensionsToDisable: IExtensionIdentifier[] = [];
-						let userMigratedSystemExtensions: IExtensionIdentifier[] = [{ id: BetterMergeId }];
-
-						system.forEach((systemExtension) => {
-							if (disabledExtensions.every(disabled => !areSameExtensions(disabled, systemExtension))) {
-								result[systemExtension.id] = systemExtension;
-							}
-						});
-
-						user.forEach((userExtension) => {
-							if (result.hasOwnProperty(userExtension.id)) {
-								log.warn(userExtension.extensionLocation.fsPath, nls.localize('overwritingExtension', "Overwriting extension {0} with {1}.", result[userExtension.id].extensionLocation.fsPath, userExtension.extensionLocation.fsPath));
-							}
-							if (disabledExtensions.every(disabled => !areSameExtensions(disabled, userExtension))) {
-								// Check if the extension is changed to system extension
-								let userMigratedSystemExtension = userMigratedSystemExtensions.filter(userMigratedSystemExtension => areSameExtensions(userMigratedSystemExtension, { id: userExtension.id }))[0];
-								if (userMigratedSystemExtension) {
-									extensionsToDisable.push(userMigratedSystemExtension);
-								} else {
-									result[userExtension.id] = userExtension;
-								}
-							}
-						});
-
-						development.forEach(developedExtension => {
-							log.info('', nls.localize('extensionUnderDevelopment', "Loading development extension at {0}", developedExtension.extensionLocation.fsPath));
-							if (result.hasOwnProperty(developedExtension.id)) {
-								log.warn(developedExtension.extensionLocation.fsPath, nls.localize('overwritingExtension', "Overwriting extension {0} with {1}.", result[developedExtension.id].extensionLocation.fsPath, developedExtension.extensionLocation.fsPath));
-							}
-							// Do not disable extensions under development
-							result[developedExtension.id] = developedExtension;
-						});
-
-						const runtimeExtensions = Object.keys(result).map(name => result[name]);
-
-						this._telemetryService.publicLog('extensionsScanned', {
-							totalCount: runtimeExtensions.length,
-							disabledCount: disabledExtensions.length
-						});
-
-						if (extensionsToDisable.length) {
-							return this.extensionManagementService.getInstalled(LocalExtensionType.User)
-								.then(installed => {
-									const toDisable = installed.filter(i => extensionsToDisable.some(e => areSameExtensions({ id: getGalleryExtensionIdFromLocal(i) }, e)));
-									return TPromise.join(toDisable.map(e => this._extensionEnablementService.setEnablement(e, EnablementState.Disabled)));
-								})
-								.then(() => {
-									this._storageService.store(BetterMergeDisabledNowKey, true);
-									return runtimeExtensions;
-								});
-						} else {
-							return runtimeExtensions;
-						}
-					});
-			}).then(extensions => this._updateEnableProposedApi(extensions));
+				let result: { [extensionId: string]: IExtensionDescription; } = {};
+				system.forEach((systemExtension) => {
+					result[systemExtension.id] = systemExtension;
+				});
+				user.forEach((userExtension) => {
+					if (result.hasOwnProperty(userExtension.id)) {
+						log.warn(userExtension.extensionLocation.fsPath, nls.localize('overwritingExtension', "Overwriting extension {0} with {1}.", result[userExtension.id].extensionLocation.fsPath, userExtension.extensionLocation.fsPath));
+					}
+					result[userExtension.id] = userExtension;
+				});
+				development.forEach(developedExtension => {
+					log.info('', nls.localize('extensionUnderDevelopment', "Loading development extension at {0}", developedExtension.extensionLocation.fsPath));
+					if (result.hasOwnProperty(developedExtension.id)) {
+						log.warn(developedExtension.extensionLocation.fsPath, nls.localize('overwritingExtension', "Overwriting extension {0} with {1}.", result[developedExtension.id].extensionLocation.fsPath, developedExtension.extensionLocation.fsPath));
+					}
+					result[developedExtension.id] = developedExtension;
+				});
+				return Object.keys(result).map(name => result[name]);
+			});
 	}
 
-	private _updateEnableProposedApi(extensions: IExtensionDescription[]): IExtensionDescription[] {
-		const enableProposedApiForAll = !this._environmentService.isBuilt || (!!this._environmentService.extensionDevelopmentPath && product.nameLong.indexOf('Insiders') >= 0);
-		const enableProposedApiFor = this._environmentService.args['enable-proposed-api'] || [];
-		for (const extension of extensions) {
-			if (!isFalsyOrEmpty(product.extensionAllowedProposedApi)
-				&& product.extensionAllowedProposedApi.indexOf(extension.id) >= 0
-			) {
-				// fast lane -> proposed api is available to all extensions
-				// that are listed in product.json-files
-				extension.enableProposedApi = true;
+	private _getRuntimeExtensions(allExtensions: IExtensionDescription[]): Promise<IExtensionDescription[]> {
+		return this._extensionEnablementService.getDisabledExtensions()
+			.then(disabledExtensions => {
 
-			} else if (extension.enableProposedApi && !extension.isBuiltin) {
-				if (
-					!enableProposedApiForAll &&
-					enableProposedApiFor.indexOf(extension.id) < 0
-				) {
-					extension.enableProposedApi = false;
-					console.error(`Extension '${extension.id} cannot use PROPOSED API (must started out of dev or enabled via --enable-proposed-api)`);
+				const result: { [extensionId: string]: IExtensionDescription; } = {};
+				const extensionsToDisable: IExtensionIdentifier[] = [];
+				const userMigratedSystemExtensions: IExtensionIdentifier[] = [{ id: BetterMergeId }];
 
-				} else {
-					// proposed api is available when developing or when an extension was explicitly
-					// spelled out via a command line argument
-					console.warn(`Extension '${extension.id}' uses PROPOSED API which is subject to change and removal without notice.`);
+				const enableProposedApiFor: string | string[] = this._environmentService.args['enable-proposed-api'] || [];
+
+				const enableProposedApiForAll = !this._environmentService.isBuilt ||
+					(!!this._environmentService.extensionDevelopmentPath && product.nameLong.indexOf('Insiders') >= 0) ||
+					(enableProposedApiFor.length === 0 && 'enable-proposed-api' in this._environmentService.args);
+
+				for (const extension of allExtensions) {
+					const isExtensionUnderDevelopment = this._environmentService.isExtensionDevelopment && extension.extensionLocation.scheme === Schemas.file && extension.extensionLocation.fsPath.indexOf(this._environmentService.extensionDevelopmentPath) === 0;
+					// Do not disable extensions under development
+					if (!isExtensionUnderDevelopment) {
+						if (disabledExtensions.some(disabled => areSameExtensions(disabled, extension))) {
+							continue;
+						}
+					}
+
+					if (!extension.isBuiltin) {
+						// Check if the extension is changed to system extension
+						const userMigratedSystemExtension = userMigratedSystemExtensions.filter(userMigratedSystemExtension => areSameExtensions(userMigratedSystemExtension, { id: extension.id }))[0];
+						if (userMigratedSystemExtension) {
+							extensionsToDisable.push(userMigratedSystemExtension);
+							continue;
+						}
+					}
+					result[extension.id] = this._updateEnableProposedApi(extension, enableProposedApiForAll, enableProposedApiFor);
 				}
+				const runtimeExtensions = Object.keys(result).map(name => result[name]);
+
+				this._telemetryService.publicLog('extensionsScanned', {
+					totalCount: runtimeExtensions.length,
+					disabledCount: disabledExtensions.length
+				});
+
+				if (extensionsToDisable.length) {
+					return this.extensionManagementService.getInstalled(LocalExtensionType.User)
+						.then(installed => {
+							const toDisable = installed.filter(i => extensionsToDisable.some(e => areSameExtensions({ id: getGalleryExtensionIdFromLocal(i) }, e)));
+							return TPromise.join(toDisable.map(e => this._extensionEnablementService.setEnablement(e, EnablementState.Disabled)));
+						})
+						.then(() => {
+							this._storageService.store(BetterMergeDisabledNowKey, true);
+							return runtimeExtensions;
+						});
+				} else {
+					return runtimeExtensions;
+				}
+			});
+	}
+
+	private _updateEnableProposedApi(extension: IExtensionDescription, enableProposedApiForAll: boolean, enableProposedApiFor: string | string[]): IExtensionDescription {
+		if (!isFalsyOrEmpty(product.extensionAllowedProposedApi)
+			&& product.extensionAllowedProposedApi.indexOf(extension.id) >= 0
+		) {
+			// fast lane -> proposed api is available to all extensions
+			// that are listed in product.json-files
+			extension.enableProposedApi = true;
+
+		} else if (extension.enableProposedApi && !extension.isBuiltin) {
+			if (
+				!enableProposedApiForAll &&
+				enableProposedApiFor.indexOf(extension.id) < 0
+			) {
+				extension.enableProposedApi = false;
+				console.error(`Extension '${extension.id} cannot use PROPOSED API (must started out of dev or enabled via --enable-proposed-api)`);
+
+			} else {
+				// proposed api is available when developing or when an extension was explicitly
+				// spelled out via a command line argument
+				console.warn(`Extension '${extension.id}' uses PROPOSED API which is subject to change and removal without notice.`);
 			}
 		}
-		return extensions;
+		return extension;
 	}
 
 	private _handleExtensionPointMessage(msg: IMessage) {
@@ -624,7 +649,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 		}
 	}
 
-	private static async _validateExtensionsCache(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, cacheKey: string, input: ExtensionScannerInput): TPromise<void> {
+	private static async _validateExtensionsCache(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, cacheKey: string, input: ExtensionScannerInput): Promise<void> {
 		const cacheFolder = path.join(environmentService.userDataPath, MANIFEST_CACHE_FOLDER);
 		const cacheFile = path.join(cacheFolder, cacheKey);
 
@@ -659,7 +684,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 		);
 	}
 
-	private static async _readExtensionCache(environmentService: IEnvironmentService, cacheKey: string): TPromise<IExtensionCacheData> {
+	private static async _readExtensionCache(environmentService: IEnvironmentService, cacheKey: string): Promise<IExtensionCacheData> {
 		const cacheFolder = path.join(environmentService.userDataPath, MANIFEST_CACHE_FOLDER);
 		const cacheFile = path.join(cacheFolder, cacheKey);
 
@@ -673,7 +698,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 		return null;
 	}
 
-	private static async _writeExtensionCache(environmentService: IEnvironmentService, cacheKey: string, cacheContents: IExtensionCacheData): TPromise<void> {
+	private static async _writeExtensionCache(environmentService: IEnvironmentService, cacheKey: string, cacheContents: IExtensionCacheData): Promise<void> {
 		const cacheFolder = path.join(environmentService.userDataPath, MANIFEST_CACHE_FOLDER);
 		const cacheFile = path.join(cacheFolder, cacheKey);
 
@@ -690,7 +715,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 		}
 	}
 
-	private static async _scanExtensionsWithCache(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, cacheKey: string, input: ExtensionScannerInput, log: ILog): TPromise<IExtensionDescription[]> {
+	private static async _scanExtensionsWithCache(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, cacheKey: string, input: ExtensionScannerInput, log: ILog): Promise<IExtensionDescription[]> {
 		if (input.devMode) {
 			// Do not cache when running out of sources...
 			return ExtensionScanner.scanExtensions(input, log);
@@ -734,7 +759,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 		return result;
 	}
 
-	private static _scanInstalledExtensions(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, log: ILog): TPromise<{ system: IExtensionDescription[], user: IExtensionDescription[], development: IExtensionDescription[] }> {
+	private static _scanInstalledExtensions(windowService: IWindowService, notificationService: INotificationService, environmentService: IEnvironmentService, extensionEnablementService: IExtensionEnablementService, log: ILog): TPromise<{ system: IExtensionDescription[], user: IExtensionDescription[], development: IExtensionDescription[] }> {
 
 		const translationConfig: TPromise<Translations> = platform.translationsConfigFile
 			? pfs.readFile(platform.translationsConfigFile, 'utf8').then((content) => {
@@ -763,7 +788,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 				log
 			);
 
-			let finalBuiltinExtensions: TPromise<IExtensionDescription[]> = builtinExtensions;
+			let finalBuiltinExtensions: TPromise<IExtensionDescription[]> = TPromise.wrap(builtinExtensions);
 
 			if (devMode) {
 				const builtInExtensionsFilePath = path.normalize(path.join(URI.parse(require.toUrl('')).fsPath, '..', 'build', 'builtInExtensions.json'));
@@ -806,7 +831,7 @@ export class ExtensionService extends Disposable implements IExtensionService {
 			}
 
 			const userExtensions = (
-				environmentService.disableExtensions || !environmentService.extensionsPath
+				extensionEnablementService.allUserExtensionsDisabled || !environmentService.extensionsPath
 					? TPromise.as([])
 					: this._scanExtensionsWithCache(
 						windowService,

@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { workspace as Workspace, FormattingOptions, TextDocument, CancellationToken, window, Disposable, workspace, WorkspaceConfiguration } from 'vscode';
-
+import { CancellationToken, Disposable, FormattingOptions, TextDocument, window, workspace as Workspace, workspace, WorkspaceConfiguration } from 'vscode';
 import * as Proto from '../protocol';
 import { ITypeScriptServiceClient } from '../typescriptService';
-import * as languageIds from '../utils/languageModeIds';
+import API from '../utils/api';
+import { isTypeScriptDocument } from '../utils/languageModeIds';
+
 
 function objsAreEqual<T>(a: T, b: T): boolean {
 	let keys = Object.keys(a);
@@ -75,7 +76,7 @@ export default class FileConfigurationManager {
 		options: FormattingOptions,
 		token: CancellationToken | undefined
 	): Promise<void> {
-		const file = this.client.normalizePath(document.uri);
+		const file = this.client.toPath(document.uri);
 		if (!file) {
 			return;
 		}
@@ -88,12 +89,12 @@ export default class FileConfigurationManager {
 			return;
 		}
 
+		this.formatOptions[key] = currentOptions;
 		const args: Proto.ConfigureRequestArguments = {
 			file,
 			...currentOptions,
 		};
 		await this.client.execute('configure', args, token);
-		this.formatOptions[key] = currentOptions;
 	}
 
 	public reset() {
@@ -144,13 +145,9 @@ export default class FileConfigurationManager {
 	}
 
 	private getPreferences(document: TextDocument): Proto.UserPreferences {
-		if (!this.client.apiVersion.has290Features()) {
+		if (!this.client.apiVersion.gte(API.v290)) {
 			return {};
 		}
-
-		const config = workspace.getConfiguration(
-			isTypeScriptDocument(document) ? 'typescript' : 'javascript',
-			document.uri);
 
 		const preferences = workspace.getConfiguration(
 			isTypeScriptDocument(document) ? 'typescript.preferences' : 'javascript.preferences',
@@ -159,14 +156,9 @@ export default class FileConfigurationManager {
 		return {
 			quotePreference: getQuoteStylePreference(preferences),
 			importModuleSpecifierPreference: getImportModuleSpecifierPreference(preferences),
-			disableSuggestions: disableSuggestionsPreference(config),
 			allowTextChangesInNewFiles: document.uri.scheme === 'file'
-		} as any; // TODO: waiting for offical TS d.ts with allowTextChangesInNewFiles
+		};
 	}
-}
-
-function disableSuggestionsPreference(config: WorkspaceConfiguration) {
-	return !config.get<boolean>('suggestionActions.enabled');
 }
 
 function getQuoteStylePreference(config: WorkspaceConfiguration) {
@@ -183,8 +175,4 @@ function getImportModuleSpecifierPreference(config: WorkspaceConfiguration) {
 		case 'non-relative': return 'non-relative';
 		default: return undefined;
 	}
-}
-
-function isTypeScriptDocument(document: TextDocument) {
-	return document.languageId === languageIds.typescript || document.languageId === languageIds.typescriptreact;
 }

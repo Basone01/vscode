@@ -4,33 +4,50 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
-import { PPromise, TPromise } from 'vs/base/common/winjs.base';
-import uri, { UriComponents } from 'vs/base/common/uri';
+import { Event } from 'vs/base/common/event';
+import * as glob from 'vs/base/common/glob';
+import { IDisposable } from 'vs/base/common/lifecycle';
 import * as objects from 'vs/base/common/objects';
 import * as paths from 'vs/base/common/paths';
-import * as glob from 'vs/base/common/glob';
+import uri, { UriComponents } from 'vs/base/common/uri';
+import { TPromise } from 'vs/base/common/winjs.base';
 import { IFilesConfiguration } from 'vs/platform/files/common/files';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
-import { IDisposable } from 'vs/base/common/lifecycle';
 
-export const ID = 'searchService';
 export const VIEW_ID = 'workbench.view.search';
 
-export const ISearchService = createDecorator<ISearchService>(ID);
+export const ISearchHistoryService = createDecorator<ISearchHistoryService>('searchHistoryService');
+export const ISearchService = createDecorator<ISearchService>('searchService');
 
 /**
  * A service that enables to search for files or with in files.
  */
 export interface ISearchService {
 	_serviceBrand: any;
-	search(query: ISearchQuery): PPromise<ISearchComplete, ISearchProgressItem>;
+	search(query: ISearchQuery, onProgress?: (result: ISearchProgressItem) => void): TPromise<ISearchComplete>;
 	extendQuery(query: ISearchQuery): void;
 	clearCache(cacheKey: string): TPromise<void>;
-	registerSearchResultProvider(provider: ISearchResultProvider): IDisposable;
+	registerSearchResultProvider(scheme: string, provider: ISearchResultProvider): IDisposable;
+}
+
+export interface ISearchHistoryValues {
+	search?: string[];
+	replace?: string[];
+	include?: string[];
+	exclude?: string[];
+}
+
+export interface ISearchHistoryService {
+	_serviceBrand: any;
+	onDidClearHistory: Event<void>;
+	clearHistory(): void;
+	load(): ISearchHistoryValues;
+	save(history: ISearchHistoryValues): void;
 }
 
 export interface ISearchResultProvider {
-	search(query: ISearchQuery): PPromise<ISearchComplete, ISearchProgressItem>;
+	search(query: ISearchQuery, onProgress?: (p: ISearchProgressItem) => void): TPromise<ISearchComplete>;
+	clearCache(cacheKey: string): TPromise<void>;
 }
 
 export interface IFolderQuery<U extends UriComponents=uri> {
@@ -190,7 +207,6 @@ export interface ISearchConfigurationProperties {
 	smartCase: boolean;
 	globalFindClipboard: boolean;
 	location: 'sidebar' | 'panel';
-	enableSearchProviders: boolean;
 }
 
 export interface ISearchConfiguration extends IFilesConfiguration {
