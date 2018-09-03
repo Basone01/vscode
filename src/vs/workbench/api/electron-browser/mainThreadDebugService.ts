@@ -5,8 +5,8 @@
 'use strict';
 
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
-import uri from 'vs/base/common/uri';
-import { IDebugService, IConfig, IDebugConfigurationProvider, IBreakpoint, IFunctionBreakpoint, IBreakpointData, IAdapterExecutable, ITerminalSettings, IDebugAdapter, IDebugAdapterProvider } from 'vs/workbench/parts/debug/common/debug';
+import { URI as uri } from 'vs/base/common/uri';
+import { IDebugService, IConfig, IDebugConfigurationProvider, IBreakpoint, IFunctionBreakpoint, IBreakpointData, IAdapterExecutable, ITerminalSettings, IDebugAdapter, IDebugAdapterProvider, ISession } from 'vs/workbench/parts/debug/common/debug';
 import { TPromise } from 'vs/base/common/winjs.base';
 import {
 	ExtHostContext, ExtHostDebugServiceShape, MainThreadDebugServiceShape, DebugSessionUUID, MainContext,
@@ -28,7 +28,7 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 	private _breakpointEventsActive: boolean;
 	private _debugAdapters: Map<number, ExtensionHostDebugAdapter>;
 	private _debugAdaptersHandleCounter = 1;
-
+	private _sessions: Map<DebugSessionUUID, ISession>;
 
 	constructor(
 		extHostContext: IExtHostContext,
@@ -36,8 +36,23 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 	) {
 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostDebugService);
 		this._toDispose = [];
-		this._toDispose.push(debugService.onDidNewSession(proc => this._proxy.$acceptDebugSessionStarted(<DebugSessionUUID>proc.getId(), proc.configuration.type, proc.getName(false))));
-		this._toDispose.push(debugService.onDidEndSession(proc => this._proxy.$acceptDebugSessionTerminated(<DebugSessionUUID>proc.getId(), proc.configuration.type, proc.getName(false))));
+		this._toDispose.push(debugService.onDidNewSession(session => {
+			this._proxy.$acceptDebugSessionStarted(<DebugSessionUUID>session.getId(), session.configuration.type, session.getName(false));
+		}));
+		this._sessions = new Map();
+		this._toDispose.push(debugService.onWillNewSession(session => {
+			this._sessions.set(session.getId(), session);
+			// Need to start listening early to new session events because a custom event can come while a session is initialising
+			this._toDispose.push(session.onDidCustomEvent(event => {
+				if (event && event.sessionId) {
+					this._proxy.$acceptDebugSessionCustomEvent(event.sessionId, session.configuration.type, session.configuration.name, event);
+				}
+			}));
+		}));
+		this._toDispose.push(debugService.onDidEndSession(session => {
+			this._proxy.$acceptDebugSessionTerminated(<DebugSessionUUID>session.getId(), session.configuration.type, session.getName(false));
+			this._sessions.delete(<DebugSessionUUID>session.getId());
+		}));
 		this._toDispose.push(debugService.getViewModel().onDidFocusSession(proc => {
 			if (proc) {
 				this._proxy.$acceptDebugSessionActiveChanged(<DebugSessionUUID>proc.getId(), proc.configuration.type, proc.getName(false));
@@ -46,14 +61,6 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 			}
 		}));
 
-		this._toDispose.push(debugService.onDidCustomEvent(event => {
-			if (event && event.sessionId) {
-				const process = this.debugService.getModel().getSessions().filter(p => p.getId() === event.sessionId).pop();
-				if (process) {
-					this._proxy.$acceptDebugSessionCustomEvent(event.sessionId, process.configuration.type, process.configuration.name, event);
-				}
-			}
-		}));
 		this._debugAdapters = new Map<number, ExtensionHostDebugAdapter>();
 	}
 
@@ -219,9 +226,9 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 	}
 
 	public $customDebugAdapterRequest(sessionId: DebugSessionUUID, request: string, args: any): TPromise<any> {
-		const process = this.debugService.getModel().getSessions().filter(p => p.getId() === sessionId).pop();
-		if (process) {
-			return process.raw.custom(request, args).then(response => {
+		const session = this._sessions.get(sessionId);
+		if (session) {
+			return session.raw.custom(request, args).then(response => {
 				if (response && response.success) {
 					return response.body;
 				} else {

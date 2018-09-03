@@ -6,7 +6,7 @@
 
 import * as nls from 'vs/nls';
 import { TPromise } from 'vs/base/common/winjs.base';
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import { ThrottledDelayer, Delayer } from 'vs/base/common/async';
 import * as errors from 'vs/base/common/errors';
 import * as paths from 'vs/base/common/paths';
@@ -43,6 +43,7 @@ import { Schemas } from 'vs/base/common/network';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IViewletPanelOptions } from 'vs/workbench/browser/parts/views/panelViewlet';
+import { ILabelService } from 'vs/platform/label/common/label';
 
 export interface IExplorerViewOptions extends IViewletViewOptions {
 	viewletState: FileViewletState;
@@ -94,7 +95,8 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IConfigurationService configurationService: IConfigurationService,
-		@IDecorationsService decorationService: IDecorationsService
+		@IDecorationsService decorationService: IDecorationsService,
+		@ILabelService private labelService: ILabelService
 	) {
 		super({ ...(options as IViewletPanelOptions), ariaHeaderLabel: nls.localize('explorerSection', "Files Explorer Section") }, keybindingService, contextMenuService, configurationService);
 
@@ -118,6 +120,7 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 		this.decorationProvider = new ExplorerDecorationsProvider(this.model, contextService);
 		decorationService.registerDecorationsProvider(this.decorationProvider);
 		this.disposables.push(this.decorationProvider);
+		this.disposables.push(this.resourceContext);
 	}
 
 	private getFileEventsExcludes(root?: URI): glob.IExpression {
@@ -142,11 +145,12 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 		};
 
 		this.disposables.push(this.contextService.onDidChangeWorkspaceName(setHeader));
+		this.disposables.push(this.labelService.onDidRegisterFormatter(setHeader));
 		setHeader();
 	}
 
 	public get name(): string {
-		return this.contextService.getWorkspace().name;
+		return this.labelService.getWorkspaceLabel(this.contextService.getWorkspace());
 	}
 
 	public get title(): string {
@@ -197,6 +201,10 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 		this.disposables.push(this.contextService.onDidChangeWorkspaceFolders(e => this.refreshFromEvent(e.added)));
 		this.disposables.push(this.contextService.onDidChangeWorkbenchState(e => this.refreshFromEvent()));
 		this.disposables.push(this.fileService.onDidChangeFileSystemProviderRegistrations(() => this.refreshFromEvent()));
+		this.disposables.push(this.labelService.onDidRegisterFormatter(() => {
+			this._onDidChangeTitleArea.fire();
+			this.refreshFromEvent();
+		}));
 	}
 
 	layoutBody(size: number): void {
@@ -790,7 +798,7 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 			this.decorationProvider.changed(targetsToResolve.map(t => t.root.resource));
 			return result;
 		});
-		this.progressService.showWhile(promise, this.partService.isCreated() ? 800 : 3200 /* less ugly initial startup */);
+		this.progressService.showWhile(promise, this.partService.isCreated() ? 800 : 1200 /* less ugly initial startup */);
 
 		return promise;
 	}
@@ -798,14 +806,21 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 	private resolveRoots(targetsToResolve: { root: ExplorerItem, resource: URI, options: { resolveTo: any[] } }[], targetsToExpand: URI[]): TPromise<any> {
 
 		// Display roots only when multi folder workspace
-		const input = this.contextService.getWorkbenchState() === WorkbenchState.FOLDER ? this.model.roots[0] : this.model;
-		const errorFileStat = (resource: URI, root: ExplorerItem) => ExplorerItem.create({
-			resource: resource,
-			name: paths.basename(resource.fsPath),
-			mtime: 0,
-			etag: undefined,
-			isDirectory: true
-		}, root, undefined, true);
+		let input = this.contextService.getWorkbenchState() === WorkbenchState.FOLDER ? this.model.roots[0] : this.model;
+
+		const errorRoot = (resource: URI, root: ExplorerItem) => {
+			if (input === this.model.roots[0]) {
+				input = this.model;
+			}
+
+			return ExplorerItem.create({
+				resource: resource,
+				name: paths.basename(resource.fsPath),
+				mtime: 0,
+				etag: undefined,
+				isDirectory: true
+			}, root, undefined, true);
+		};
 
 		const setInputAndExpand = (input: ExplorerItem | Model, statsToExpand: ExplorerItem[]) => {
 			// Make sure to expand all folders that where expanded in the previous session
@@ -826,7 +841,7 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 						return ExplorerItem.create(result.stat, targetsToResolve[index].root, targetsToResolve[index].options.resolveTo);
 					}
 
-					return errorFileStat(targetsToResolve[index].resource, targetsToResolve[index].root);
+					return errorRoot(targetsToResolve[index].resource, targetsToResolve[index].root);
 				});
 				// Subsequent refresh: Merge stat into our local model and refresh tree
 				modelStats.forEach((modelStat, index) => {
@@ -849,7 +864,7 @@ export class ExplorerView extends TreeViewsViewletPanel implements IExplorerView
 		let delayer = new Delayer(100);
 		let delayerPromise: TPromise;
 		return TPromise.join(targetsToResolve.map((target, index) => this.fileService.resolveFile(target.resource, target.options)
-			.then(result => result.isDirectory ? ExplorerItem.create(result, target.root, target.options.resolveTo) : errorFileStat(target.resource, target.root), () => errorFileStat(target.resource, target.root))
+			.then(result => result.isDirectory ? ExplorerItem.create(result, target.root, target.options.resolveTo) : errorRoot(target.resource, target.root), () => errorRoot(target.resource, target.root))
 			.then(modelStat => {
 				// Subsequent refresh: Merge stat into our local model and refresh tree
 				if (index < this.model.roots.length) {

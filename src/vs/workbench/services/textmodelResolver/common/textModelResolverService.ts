@@ -5,7 +5,7 @@
 'use strict';
 
 import { TPromise } from 'vs/base/common/winjs.base';
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import { first } from 'vs/base/common/async';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { ITextModel } from 'vs/editor/common/model';
@@ -86,7 +86,6 @@ class ResourceModelCollection extends ReferenceCollection<TPromise<ITextEditorMo
 
 		return first(factories).then(model => {
 			if (!model) {
-				console.error(`Unable to open '${resource}' resource is not available.`); // TODO PII
 				return TPromise.wrapError<ITextModel>(new Error('resource is not available'));
 			}
 

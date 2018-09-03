@@ -5,7 +5,7 @@
 'use strict';
 
 import { TPromise } from 'vs/base/common/winjs.base';
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { ITextModel } from 'vs/editor/common/model';
 import { IEditorModel } from 'vs/platform/editor/common/editor';
@@ -42,4 +42,6 @@ export interface ITextEditorModel extends IEditorModel {
 	 * Provides access to the underlying `ITextModel`.
 	 */
 	textEditorModel: ITextModel;
+
+	isReadonly(): boolean;
 }

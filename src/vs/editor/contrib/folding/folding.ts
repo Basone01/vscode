@@ -5,34 +5,34 @@
 
 'use strict';
 
-import 'vs/css!./folding';
-import * as nls from 'vs/nls';
-import * as types from 'vs/base/common/types';
+import { CancelablePromise, createCancelablePromise, Delayer, RunOnceScheduler } from 'vs/base/common/async';
+import { CancellationToken } from 'vs/base/common/cancellation';
+import { KeyChord, KeyCode, KeyMod } from 'vs/base/common/keyCodes';
+import { dispose, IDisposable } from 'vs/base/common/lifecycle';
 import { escapeRegExpCharacters } from 'vs/base/common/strings';
-import { RunOnceScheduler, Delayer, CancelablePromise, createCancelablePromise } from 'vs/base/common/async';
-import { KeyCode, KeyMod, KeyChord } from 'vs/base/common/keyCodes';
-import { IDisposable, dispose } from 'vs/base/common/lifecycle';
+import * as types from 'vs/base/common/types';
 import { TPromise } from 'vs/base/common/winjs.base';
-import { ScrollType, IEditorContribution } from 'vs/editor/common/editorCommon';
-import { ITextModel } from 'vs/editor/common/model';
-import { registerEditorAction, registerEditorContribution, ServicesAccessor, EditorAction, registerInstantiatedEditorAction } from 'vs/editor/browser/editorExtensions';
+import 'vs/css!./folding';
+import { IEmptyContentData, IMarginData } from 'vs/editor/browser/controller/mouseTarget';
 import { ICodeEditor, IEditorMouseEvent, MouseTargetType } from 'vs/editor/browser/editorBrowser';
-import { FoldingModel, setCollapseStateAtLevel, CollapseMemento, setCollapseStateLevelsDown, setCollapseStateLevelsUp, setCollapseStateForMatchingLines, setCollapseStateForType } from 'vs/editor/contrib/folding/foldingModel';
+import { EditorAction, registerEditorAction, registerEditorContribution, registerInstantiatedEditorAction, ServicesAccessor } from 'vs/editor/browser/editorExtensions';
+import { IConfigurationChangedEvent } from 'vs/editor/common/config/editorOptions';
+import { IPosition } from 'vs/editor/common/core/position';
+import { IRange } from 'vs/editor/common/core/range';
+import { IEditorContribution, ScrollType } from 'vs/editor/common/editorCommon';
+import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
+import { ITextModel } from 'vs/editor/common/model';
+import { FoldingRangeKind, FoldingRangeProviderRegistry } from 'vs/editor/common/modes';
+import { LanguageConfigurationRegistry } from 'vs/editor/common/modes/languageConfigurationRegistry';
+import { CollapseMemento, FoldingModel, setCollapseStateAtLevel, setCollapseStateForMatchingLines, setCollapseStateForType, setCollapseStateLevelsDown, setCollapseStateLevelsUp } from 'vs/editor/contrib/folding/foldingModel';
+import { HiddenRangeModel } from 'vs/editor/contrib/folding/hiddenRangeModel';
+import { IndentRangeProvider } from 'vs/editor/contrib/folding/indentRangeProvider';
+import { ID_INIT_PROVIDER, InitializingRangeProvider } from 'vs/editor/contrib/folding/intializingRangeProvider';
+import * as nls from 'vs/nls';
+import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { FoldingDecorationProvider } from './foldingDecorations';
 import { FoldingRegions } from './foldingRanges';
-import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
-import { IConfigurationChangedEvent } from 'vs/editor/common/config/editorOptions';
-import { IMarginData, IEmptyContentData } from 'vs/editor/browser/controller/mouseTarget';
-import { HiddenRangeModel } from 'vs/editor/contrib/folding/hiddenRangeModel';
-import { IRange } from 'vs/editor/common/core/range';
-import { LanguageConfigurationRegistry } from 'vs/editor/common/modes/languageConfigurationRegistry';
-import { IndentRangeProvider } from 'vs/editor/contrib/folding/indentRangeProvider';
-import { IPosition } from 'vs/editor/common/core/position';
-import { FoldingRangeProviderRegistry, FoldingRangeKind } from 'vs/editor/common/modes';
-import { SyntaxRangeProvider, ID_SYNTAX_PROVIDER } from './syntaxRangeProvider';
-import { CancellationToken } from 'vs/base/common/cancellation';
-import { InitializingRangeProvider, ID_INIT_PROVIDER } from 'vs/editor/contrib/folding/intializingRangeProvider';
-import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
+import { ID_SYNTAX_PROVIDER, SyntaxRangeProvider } from './syntaxRangeProvider';
 
 export const ID = 'editor.contrib.folding';
 
@@ -332,10 +332,13 @@ export class FoldingController implements IEditorContribution {
 		switch (e.target.type) {
 			case MouseTargetType.GUTTER_LINE_DECORATIONS:
 				const data = e.target.detail as IMarginData;
-				const gutterOffsetX = data.offsetX - data.glyphMarginWidth - data.lineNumbersWidth - data.glyphMarginLeft;
+				const offsetLeftInGutter = (e.target.element as HTMLElement).offsetLeft;
+				const gutterOffsetX = data.offsetX - offsetLeftInGutter;
+
+				// const gutterOffsetX = data.offsetX - data.glyphMarginWidth - data.lineNumbersWidth - data.glyphMarginLeft;
 
 				// TODO@joao TODO@alex TODO@martin this is such that we don't collide with dirty diff
-				if (gutterOffsetX <= 10) {
+				if (gutterOffsetX < 5) { // the whitespace between the border and the real folding icon border is 5px
 					return;
 				}
 

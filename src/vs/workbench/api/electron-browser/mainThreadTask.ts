@@ -6,7 +6,7 @@
 
 import * as nls from 'vs/nls';
 
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import { generateUuid } from 'vs/base/common/uuid';
 import * as Objects from 'vs/base/common/objects';
 import { TPromise } from 'vs/base/common/winjs.base';
@@ -504,7 +504,7 @@ export class MainThreadTask implements MainThreadTaskShape {
 		this._taskService.registerTaskSystem(key, {
 			platform: platform,
 			uriProvider: (path: string): URI => {
-				return URI.parse(`${info.scheme}://${info.host}:${info.port}${path}`);
+				return URI.parse(`${info.scheme}://${info.authority}${path}`);
 			},
 			context: this._extHostContext,
 			resolveVariables: (workspaceFolder: IWorkspaceFolder, variables: Set<string>): TPromise<Map<string, string>> => {

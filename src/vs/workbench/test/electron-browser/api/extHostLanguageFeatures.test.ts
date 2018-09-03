@@ -8,7 +8,7 @@
 import * as assert from 'assert';
 import { TestInstantiationService } from 'vs/platform/instantiation/test/common/instantiationServiceMock';
 import { setUnexpectedErrorHandler, errorHandler } from 'vs/base/common/errors';
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import * as types from 'vs/workbench/api/node/extHostTypes';
 import { TextModel as EditorModel } from 'vs/editor/common/model/textModel';
 import { Position as EditorPosition } from 'vs/editor/common/core/position';
@@ -1011,7 +1011,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		return rpcProtocol.sync().then(() => {
-			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 }).then(value => {
+			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 }, CancellationToken.None).then(value => {
 				assert.equal(value.length, 2);
 				let [first, second] = value;
 				assert.equal(first.text, 'testing');
@@ -1032,7 +1032,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		return rpcProtocol.sync().then(() => {
-			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 });
+			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 }, CancellationToken.None);
 		});
 	});
 
@@ -1057,7 +1057,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		return rpcProtocol.sync().then(() => {
-			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 }).then(value => {
+			return getDocumentFormattingEdits(model, { insertSpaces: true, tabSize: 4 }, CancellationToken.None).then(value => {
 				assert.equal(value.length, 1);
 				let [first] = value;
 				assert.equal(first.text, 'testing');
@@ -1074,7 +1074,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		return rpcProtocol.sync().then(() => {
-			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 }).then(value => {
+			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 }, CancellationToken.None).then(value => {
 				assert.equal(value.length, 1);
 				let [first] = value;
 				assert.equal(first.text, 'testing');
@@ -1100,7 +1100,7 @@ suite('ExtHostLanguageFeatures', function () {
 			}
 		}));
 		return rpcProtocol.sync().then(() => {
-			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 }).then(value => {
+			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 }, CancellationToken.None).then(value => {
 				assert.equal(value.length, 1);
 				let [first] = value;
 				assert.equal(first.text, 'range2');
@@ -1120,7 +1120,7 @@ suite('ExtHostLanguageFeatures', function () {
 		}));
 
 		return rpcProtocol.sync().then(() => {
-			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 });
+			return getDocumentRangeFormattingEdits(model, new EditorRange(1, 1, 1, 1), { insertSpaces: true, tabSize: 4 }, CancellationToken.None);
 		});
 	});
 

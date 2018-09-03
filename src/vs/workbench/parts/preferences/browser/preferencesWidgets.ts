@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from 'vs/nls';
-import URI from 'vs/base/common/uri';
-import { $ } from 'vs/base/browser/builder';
+import { URI } from 'vs/base/common/uri';
 import * as DOM from 'vs/base/browser/dom';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { Disposable, IDisposable, dispose } from 'vs/base/common/lifecycle';
@@ -318,7 +317,7 @@ export class FolderSettingsActionItem extends BaseActionItem {
 	}
 
 	public render(container: HTMLElement): void {
-		this.builder = $(container);
+		this.element = container;
 
 		this.container = container;
 		this.labelElement = DOM.$('.action-title');

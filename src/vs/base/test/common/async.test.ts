@@ -5,10 +5,10 @@
 'use strict';
 
 import * as assert from 'assert';
-import { TPromise } from 'vs/base/common/winjs.base';
 import * as async from 'vs/base/common/async';
-import URI from 'vs/base/common/uri';
 import { isPromiseCanceledError } from 'vs/base/common/errors';
+import { URI } from 'vs/base/common/uri';
+import { TPromise } from 'vs/base/common/winjs.base';
 
 suite('Async', () => {
 
@@ -139,16 +139,6 @@ suite('Async', () => {
 		assert.equal(result, 1234);
 	});
 
-	test('asDisposablePromise', async function () {
-		let value = await async.asDisposablePromise(TPromise.as(1)).promise;
-		assert.equal(value, 1);
-
-		let disposablePromise = async.asDisposablePromise(TPromise.timeout(1000).then(_ => 1), 2);
-		disposablePromise.dispose();
-		value = await disposablePromise.promise;
-		assert.equal(value, 2);
-	});
-
 	test('Throttler - non async', function () {
 		let count = 0;
 		let factory = () => {
@@ -276,30 +266,6 @@ suite('Async', () => {
 		promises.push(throttler.queue(factoryFactory(3)).then((n) => { assert.equal(n, 3); }));
 
 		return TPromise.join(promises);
-	});
-
-	test('Throttler - progress should work', function () {
-		let order = 0;
-		let factory = () => new TPromise((c, e, p) => {
-			TPromise.timeout(0).done(() => {
-				p(order++);
-				c(true);
-			});
-		});
-
-		let throttler = new async.Throttler();
-		let promises: TPromise[] = [];
-		let progresses: any[][] = [[], [], []];
-
-		promises.push(throttler.queue(factory).then(null, null, (p) => progresses[0].push(p)));
-		promises.push(throttler.queue(factory).then(null, null, (p) => progresses[1].push(p)));
-		promises.push(throttler.queue(factory).then(null, null, (p) => progresses[2].push(p)));
-
-		return TPromise.join(promises).then(() => {
-			assert.deepEqual(progresses[0], [0]);
-			assert.deepEqual(progresses[1], [0]);
-			assert.deepEqual(progresses[2], [0]);
-		});
 	});
 
 	test('Delayer', function () {
@@ -451,54 +417,6 @@ suite('Async', () => {
 		assert(delayer.isTriggered());
 
 		return p;
-	});
-
-	test('Delayer - progress should work', function () {
-		let order = 0;
-		let factory = () => new TPromise((c, e, p) => {
-			TPromise.timeout(0).done(() => {
-				p(order++);
-				c(true);
-			});
-		});
-
-		let delayer = new async.Delayer(0);
-		let promises: TPromise[] = [];
-		let progresses: any[][] = [[], [], []];
-
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[0].push(p)));
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[1].push(p)));
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[2].push(p)));
-
-		return TPromise.join(promises).then(() => {
-			assert.deepEqual(progresses[0], [0]);
-			assert.deepEqual(progresses[1], [0]);
-			assert.deepEqual(progresses[2], [0]);
-		});
-	});
-
-	test('ThrottledDelayer - progress should work', function () {
-		let order = 0;
-		let factory = () => new TPromise((c, e, p) => {
-			TPromise.timeout(0).done(() => {
-				p(order++);
-				c(true);
-			});
-		});
-
-		let delayer = new async.ThrottledDelayer(0);
-		let promises: TPromise[] = [];
-		let progresses: any[][] = [[], [], []];
-
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[0].push(p)));
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[1].push(p)));
-		promises.push(delayer.trigger(factory).then(null, null, (p) => progresses[2].push(p)));
-
-		return TPromise.join(promises).then(() => {
-			assert.deepEqual(progresses[0], [0]);
-			assert.deepEqual(progresses[1], [0]);
-			assert.deepEqual(progresses[2], [0]);
-		});
 	});
 
 	test('Sequence', function () {
