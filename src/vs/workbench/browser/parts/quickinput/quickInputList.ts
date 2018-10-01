@@ -153,6 +153,7 @@ class ListElementRenderer implements IRenderer<ListElement, IListElementTemplate
 
 		// ARIA label
 		data.entry.setAttribute('aria-label', [element.saneLabel, element.saneDescription, element.saneDetail]
+			.map(s => s && parseOcticons(s).text)
 			.filter(s => !!s)
 			.join(', '));
 
@@ -247,6 +248,7 @@ export class QuickInputList {
 		const delegate = new ListElementDelegate();
 		this.list = this.instantiationService.createInstance(WorkbenchList, this.container, delegate, [new ListElementRenderer()], {
 			identityProvider: element => element.label,
+			openController: { shouldOpen: () => false }, // Workaround #58124
 			multipleSelectionSupport: false
 		}) as WorkbenchList<ListElement>;
 		this.list.getHTMLElement().id = id;

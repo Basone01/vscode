@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import * as errors from 'vs/base/common/errors';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { RunOnceScheduler } from 'vs/base/common/async';
 import * as lifecycle from 'vs/base/common/lifecycle';
@@ -35,7 +34,7 @@ import { RemoveBreakpointAction } from 'vs/workbench/parts/debug/browser/debugAc
 import { IDebugEditorContribution, IDebugService, State, IBreakpoint, EDITOR_CONTRIBUTION_ID, CONTEXT_BREAKPOINT_WIDGET_VISIBLE, IStackFrame, IDebugConfiguration, IExpression, IExceptionInfo, BreakpointWidgetContext } from 'vs/workbench/parts/debug/common/debug';
 import { BreakpointWidget } from 'vs/workbench/parts/debug/electron-browser/breakpointWidget';
 import { ExceptionWidget } from 'vs/workbench/parts/debug/browser/exceptionWidget';
-import { FloatingClickWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
+import { FloatingClickWidget } from 'vs/workbench/browser/parts/editor/editorWidgets';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { Position } from 'vs/editor/common/core/position';
 import { CoreEditingCommands } from 'vs/editor/browser/controller/coreCommands';
@@ -202,17 +201,22 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 					if (!env.isLinux && breakpoints.some(bp => !!bp.condition || !!bp.logMessage || !!bp.hitCondition)) {
 						const logPoint = breakpoints.every(bp => !!bp.logMessage);
 						const breakpointType = logPoint ? nls.localize('logPoint', "Logpoint") : nls.localize('breakpoint', "Breakpoint");
-						this.dialogService.show(severity.Info, nls.localize('breakpointHasCondition', "This {0} has a {1} that will get lost on remove. Consider disabling the {0} instead.",
-							breakpointType.toLowerCase(), logPoint ? nls.localize('message', "message") : nls.localize('condition', "condition")), [
+						const disable = breakpoints.some(bp => bp.enabled);
+
+						this.dialogService.show(severity.Info, nls.localize('breakpointHasCondition', "This {0} has a {1} that will get lost on remove. Consider {2} the {0} instead.",
+							breakpointType.toLowerCase(),
+							logPoint ? nls.localize('message', "message") : nls.localize('condition', "condition"),
+							disable ? nls.localize('disabling', "disabling") : nls.localize('enabling', "enabling")
+						), [
 								nls.localize('removeLogPoint', "Remove {0}", breakpointType),
-								nls.localize('disableLogPoint', "Disable {0}", breakpointType),
+								nls.localize('disableLogPoint', "{0} {1}", disable ? nls.localize('disable', "Disable") : nls.localize('enable', "Enable"), breakpointType),
 								nls.localize('cancel', "Cancel")
 							], { cancelId: 2 }).then(choice => {
 								if (choice === 0) {
 									breakpoints.forEach(bp => this.debugService.removeBreakpoints(bp.getId()));
 								}
 								if (choice === 1) {
-									breakpoints.forEach(bp => this.debugService.enableOrDisableBreakpoints(false, bp));
+									breakpoints.forEach(bp => this.debugService.enableOrDisableBreakpoints(!disable, bp));
 								}
 							});
 					} else {
@@ -410,7 +414,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 			return;
 		}
 
-		if (!this.configurationService.getValue<IDebugConfiguration>('debug').enableAllHovers) {
+		if (this.configurationService.getValue<IDebugConfiguration>('debug').enableAllHovers && mouseEvent.target.position) {
 			this.nonDebugHoverPosition = mouseEvent.target.position;
 			this.provideNonDebugHoverScheduler.schedule();
 		}
@@ -516,7 +520,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 		if (model && LAUNCH_JSON_REGEX.test(model.uri.toString())) {
 			this.configurationWidget = this.instantiationService.createInstance(FloatingClickWidget, this.editor, nls.localize('addConfiguration', "Add Configuration..."), null);
 			this.configurationWidget.render();
-			this.toDispose.push(this.configurationWidget.onClick(() => this.addLaunchConfiguration().done(undefined, errors.onUnexpectedError)));
+			this.toDispose.push(this.configurationWidget.onClick(() => this.addLaunchConfiguration()));
 		}
 	}
 

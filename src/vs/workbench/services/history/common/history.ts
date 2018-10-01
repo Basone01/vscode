@@ -21,6 +21,11 @@ export interface IHistoryService {
 	reopenLastClosedEditor(): void;
 
 	/**
+	 * Navigates to the last location where an edit happened.
+	 */
+	openLastEditLocation(): void;
+
+	/**
 	 * Navigate forwards in history.
 	 *
 	 * @param acrossEditors instructs the history to skip navigation entries that
@@ -52,6 +57,11 @@ export interface IHistoryService {
 	clear(): void;
 
 	/**
+	 * Clear list of recently opened editors.
+	 */
+	clearRecentlyOpened(): void;
+
+	/**
 	 * Get the entire history of opened editors.
 	 */
 	getHistory(): (IEditorInput | IResourceInput)[];
@@ -60,12 +70,14 @@ export interface IHistoryService {
 	 * Looking at the editor history, returns the workspace root of the last file that was
 	 * inside the workspace and part of the editor history.
 	 *
-	 * @param schemeFilter optional filter to restrict roots by scheme.
+	 * @param schemeFilter filter to restrict roots by scheme.
 	 */
 	getLastActiveWorkspaceRoot(schemeFilter?: string): URI;
 
 	/**
-	 * Looking at the editor history, returns the resource of the last file tht was opened.
+	 * Looking at the editor history, returns the resource of the last file that was opened.
+	 *
+	 * @param schemeFilter filter to restrict roots by scheme.
 	 */
-	getLastActiveFile(): URI;
+	getLastActiveFile(schemeFilter: string): URI;
 }

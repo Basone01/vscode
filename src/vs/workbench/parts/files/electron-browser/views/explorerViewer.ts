@@ -56,7 +56,6 @@ import { IDialogService, IConfirmationResult, IConfirmation, getConfirmMessage }
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { IEditorService, SIDE_GROUP, ACTIVE_GROUP } from 'vs/workbench/services/editor/common/editorService';
 import { fillInContextMenuActions } from 'vs/platform/actions/browser/menuItemActionItem';
-import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
 
 export class FileDataSource implements IDataSource {
 	constructor(
@@ -408,7 +407,6 @@ export class FileController extends WorkbenchTreeController implements IDisposab
 		@IMenuService private menuService: IMenuService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IClipboardService private clipboardService: IClipboardService,
-		@IKeybindingService private keybindingService: IKeybindingService,
 		@IConfigurationService configurationService: IConfigurationService
 	) {
 		super({ clickBehavior: ClickBehavior.ON_MOUSE_UP /* do not change to not break DND */ }, configurationService);
@@ -502,8 +500,20 @@ export class FileController extends WorkbenchTreeController implements IDisposab
 					sideBySide = tree.useAltAsMultipleSelectionModifier ? (event.ctrlKey || event.metaKey) : event.altKey;
 				}
 
-				this.openEditor(stat, { preserveFocus, sideBySide, pinned: isDoubleClick || (event && event.middleButton) });
+				this.openEditor(stat, { preserveFocus, sideBySide, pinned: isDoubleClick });
 			}
+		}
+
+		return true;
+	}
+
+	public onMouseMiddleClick(tree: WorkbenchTree, element: ExplorerItem | Model, event: IMouseEvent): boolean {
+		let sideBySide = false;
+		if (event) {
+			sideBySide = tree.useAltAsMultipleSelectionModifier ? (event.ctrlKey || event.metaKey) : event.altKey;
+		}
+		if (element instanceof ExplorerItem && !element.isDirectory) {
+			this.openEditor(element, { preserveFocus: true, sideBySide, pinned: true });
 		}
 
 		return true;
@@ -540,9 +550,6 @@ export class FileController extends WorkbenchTreeController implements IDisposab
 				if (wasCancelled) {
 					tree.domFocus();
 				}
-			},
-			getKeyBinding: (action) => {
-				return this.keybindingService.lookupKeybinding(action.id);
 			},
 			getActionsContext: () => selection && selection.indexOf(stat) >= 0
 				? selection.map((fs: ExplorerItem) => fs.resource)
@@ -913,19 +920,16 @@ export class FileDragAndDrop extends SimpleFileResourceDragAndDrop {
 	}
 
 	public drop(tree: ITree, data: IDragAndDropData, target: ExplorerItem | Model, originalEvent: DragMouseEvent): void {
-		let promise: TPromise<void> = TPromise.as(null);
 
 		// Desktop DND (Import file)
 		if (data instanceof DesktopDragAndDropData) {
-			promise = this.handleExternalDrop(tree, data, target, originalEvent);
+			this.handleExternalDrop(tree, data, target, originalEvent);
 		}
 
 		// In-Explorer DND (Move/Copy file)
 		else {
-			promise = this.handleExplorerDrop(tree, data, target, originalEvent);
+			this.handleExplorerDrop(tree, data, target, originalEvent);
 		}
-
-		promise.done(null, errors.onUnexpectedError);
 	}
 
 	private handleExternalDrop(tree: ITree, data: DesktopDragAndDropData, target: ExplorerItem | Model, originalEvent: DragMouseEvent): TPromise<void> {

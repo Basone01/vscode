@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { app, ipcMain as ipc, systemPreferences, shell, Event } from 'electron';
+import { app, ipcMain as ipc, systemPreferences, shell, Event, contentTracing } from 'electron';
 import * as platform from 'vs/base/common/platform';
 import { WindowsManager } from 'vs/code/electron-main/windows';
 import { IWindowsService, OpenContext, ActiveWindowManager } from 'vs/platform/windows/common/windows';
@@ -19,7 +19,7 @@ import { Server as ElectronIPCServer } from 'vs/base/parts/ipc/electron-main/ipc
 import { Server, connect, Client } from 'vs/base/parts/ipc/node/ipc.net';
 import { SharedProcess } from 'vs/code/electron-main/sharedProcess';
 import { Mutex } from 'windows-mutex';
-import { LaunchService, LaunchChannel, ILaunchService } from 'vs/code/electron-main/launch';
+import { LaunchService, LaunchChannel, ILaunchService } from 'vs/platform/launch/electron-main/launchService';
 import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
@@ -41,7 +41,7 @@ import { ProxyAuthHandler } from 'vs/code/electron-main/auth';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { ConfigurationService } from 'vs/platform/configuration/node/configurationService';
 import { TPromise } from 'vs/base/common/winjs.base';
-import { IWindowsMainService } from 'vs/platform/windows/electron-main/windows';
+import { IWindowsMainService, ICodeWindow } from 'vs/platform/windows/electron-main/windows';
 import { IHistoryMainService } from 'vs/platform/history/common/history';
 import { isUndefinedOrNull } from 'vs/base/common/types';
 import { KeyboardLayoutMonitor } from 'vs/code/electron-main/keyboard';
@@ -68,6 +68,9 @@ import { hasArgs } from 'vs/platform/environment/node/argv';
 import { RunOnceScheduler } from 'vs/base/common/async';
 import { registerContextMenuListener } from 'vs/base/parts/contextmenu/electron-main/contextmenu';
 import { THEME_STORAGE_KEY, THEME_BG_STORAGE_KEY } from 'vs/code/electron-main/theme';
+import { nativeSep, join } from 'vs/base/common/paths';
+import { homedir } from 'os';
+import { localize } from 'vs/nls';
 
 export class CodeApplication {
 
@@ -104,7 +107,6 @@ export class CodeApplication {
 		errors.setUnexpectedErrorHandler(err => this.onUnexpectedError(err));
 		process.on('uncaughtException', err => this.onUnexpectedError(err));
 		process.on('unhandledRejection', (reason: any, promise: Promise<any>) => errors.onUnexpectedError(reason));
-		process.on('SIGPIPE', () => this.onUnexpectedError(new Error('Unexpected SIGPIPE'))); // workaround https://github.com/electron/electron/issues/13254
 
 		// Contextmenu via IPC support
 		registerContextMenuListener();
@@ -234,7 +236,7 @@ export class CodeApplication {
 		});
 
 		ipc.on('vscode:labelRegisterFormatter', (event: any, data: RegisterFormatterEvent) => {
-			this.labelService.registerFormatter(data.scheme, data.formatter);
+			this.labelService.registerFormatter(data.selector, data.formatter);
 		});
 
 		ipc.on('vscode:toggleDevTools', (event: Event) => {
@@ -266,9 +268,9 @@ export class CodeApplication {
 			return true;
 		}
 
-		const srcUri: any = URI.parse(source.toLowerCase()).toString();
-
-		return srcUri.startsWith(URI.file(this.environmentService.appRoot.toLowerCase()).toString());
+		const srcUri: any = URI.parse(source).fsPath.toLowerCase();
+		const rootUri = URI.file(this.environmentService.appRoot).fsPath.toLowerCase();
+		return srcUri.startsWith(rootUri + nativeSep);
 	}
 
 	private onUnexpectedError(err: Error): void {
@@ -362,10 +364,46 @@ export class CodeApplication {
 				this.toDispose.push(authHandler);
 
 				// Open Windows
-				appInstantiationService.invokeFunction(accessor => this.openFirstWindow(accessor));
+				const windows = appInstantiationService.invokeFunction(accessor => this.openFirstWindow(accessor));
 
 				// Post Open Windows Tasks
 				appInstantiationService.invokeFunction(accessor => this.afterWindowOpen(accessor));
+
+				// Tracing: Stop tracing after windows are ready if enabled
+				if (this.environmentService.args.trace) {
+					this.logService.info(`Tracing: waiting for windows to get ready...`);
+
+					let recordingStopped = false;
+					const stopRecording = (timeout) => {
+						if (recordingStopped) {
+							return;
+						}
+
+						recordingStopped = true; // only once
+
+						contentTracing.stopRecording(join(homedir(), `${product.applicationName}-${Math.random().toString(16).slice(-4)}.trace.txt`), path => {
+							if (!timeout) {
+								this.windowsMainService.showMessageBox({
+									type: 'info',
+									message: localize('trace.message', "Successfully created trace."),
+									detail: localize('trace.detail', "Please create an issue and manually attach the following file:\n{0}", path),
+									buttons: [localize('trace.ok', "Ok")]
+								}, this.windowsMainService.getLastActiveWindow());
+							} else {
+								this.logService.info(`Tracing: data recorded (after 30s timeout) to ${path}`);
+							}
+						});
+					};
+
+					// Wait up to 30s before creating the trace anyways
+					const timeoutHandle = setTimeout(() => stopRecording(true), 30000);
+
+					// Wait for all windows to get ready and stop tracing then
+					TPromise.join(windows.map(window => window.ready())).then(() => {
+						clearTimeout(timeoutHandle);
+						stopRecording(false);
+					});
+				}
 			});
 		});
 	}
@@ -418,7 +456,7 @@ export class CodeApplication {
 		return this.instantiationService.createChild(services);
 	}
 
-	private openFirstWindow(accessor: ServicesAccessor): void {
+	private openFirstWindow(accessor: ServicesAccessor): ICodeWindow[] {
 		const appInstantiationService = accessor.get(IInstantiationService);
 
 		// Register more Main IPC services
@@ -442,7 +480,7 @@ export class CodeApplication {
 		const windowsService = accessor.get(IWindowsService);
 		const windowsChannel = new WindowsChannel(windowsService);
 		this.electronIpcServer.registerChannel('windows', windowsChannel);
-		this.sharedProcessClient.done(client => client.registerChannel('windows', windowsChannel));
+		this.sharedProcessClient.then(client => client.registerChannel('windows', windowsChannel));
 
 		const menubarService = accessor.get(IMenubarService);
 		const menubarChannel = new MenubarChannel(menubarService);
@@ -455,7 +493,7 @@ export class CodeApplication {
 		// Log level management
 		const logLevelChannel = new LogLevelSetterChannel(accessor.get(ILogService));
 		this.electronIpcServer.registerChannel('loglevel', logLevelChannel);
-		this.sharedProcessClient.done(client => client.registerChannel('loglevel', logLevelChannel));
+		this.sharedProcessClient.then(client => client.registerChannel('loglevel', logLevelChannel));
 
 		// Lifecycle
 		this.lifecycleService.ready();
@@ -508,12 +546,14 @@ export class CodeApplication {
 		const hasFileURIs = hasArgs(args['file-uri']);
 
 		if (args['new-window'] && !hasCliArgs && !hasFolderURIs && !hasFileURIs) {
-			this.windowsMainService.open({ context, cli: args, forceNewWindow: true, forceEmpty: true, initialStartup: true }); // new window if "-n" was used without paths
-		} else if (macOpenFiles && macOpenFiles.length && !hasCliArgs && !hasFolderURIs && !hasFileURIs) {
-			this.windowsMainService.open({ context: OpenContext.DOCK, cli: args, urisToOpen: macOpenFiles.map(file => URI.file(file)), initialStartup: true }); // mac: open-file event received on startup
-		} else {
-			this.windowsMainService.open({ context, cli: args, forceNewWindow: args['new-window'] || (!hasCliArgs && args['unity-launch']), diffMode: args.diff, initialStartup: true }); // default: read paths from cli
+			return this.windowsMainService.open({ context, cli: args, forceNewWindow: true, forceEmpty: true, initialStartup: true }); // new window if "-n" was used without paths
 		}
+
+		if (macOpenFiles && macOpenFiles.length && !hasCliArgs && !hasFolderURIs && !hasFileURIs) {
+			return this.windowsMainService.open({ context: OpenContext.DOCK, cli: args, urisToOpen: macOpenFiles.map(file => URI.file(file)), initialStartup: true }); // mac: open-file event received on startup
+		}
+
+		return this.windowsMainService.open({ context, cli: args, forceNewWindow: args['new-window'] || (!hasCliArgs && args['unity-launch']), diffMode: args.diff, initialStartup: true }); // default: read paths from cli
 	}
 
 	private afterWindowOpen(accessor: ServicesAccessor): void {

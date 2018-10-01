@@ -9,7 +9,6 @@ import * as nls from 'vs/nls';
 import { URI } from 'vs/base/common/uri';
 import * as objects from 'vs/base/common/objects';
 import * as types from 'vs/base/common/types';
-import * as errors from 'vs/base/common/errors';
 import * as DOM from 'vs/base/browser/dom';
 import { CodeEditorWidget } from 'vs/editor/browser/widget/codeEditorWidget';
 import { EditorInput, EditorOptions, IEditorMemento, ITextEditor } from 'vs/workbench/common/editor';
@@ -77,7 +76,7 @@ export abstract class BaseTextEditor extends BaseEditor implements ITextEditor {
 		return this._textFileService;
 	}
 
-	private handleConfigurationChangeEvent(configuration?: IEditorConfiguration): void {
+	protected handleConfigurationChangeEvent(configuration?: IEditorConfiguration): void {
 		if (this.isVisible()) {
 			this.updateEditorConfiguration(configuration);
 		} else {
@@ -173,7 +172,7 @@ export abstract class BaseTextEditor extends BaseEditor implements ITextEditor {
 			(reason === SaveReason.FOCUS_CHANGE && mode === AutoSaveMode.ON_FOCUS_CHANGE)
 		) {
 			if (this.textFileService.isDirty()) {
-				this.textFileService.saveAll(void 0, { reason }).done(null, errors.onUnexpectedError);
+				this.textFileService.saveAll(void 0, { reason });
 			}
 		}
 	}
@@ -261,9 +260,9 @@ export abstract class BaseTextEditor extends BaseEditor implements ITextEditor {
 	/**
 	 * Clears the text editor view state for the given resources.
 	 */
-	protected clearTextEditorViewState(resources: URI[]): void {
+	protected clearTextEditorViewState(resources: URI[], group?: IEditorGroup): void {
 		resources.forEach(resource => {
-			this.editorMemento.clearState(resource);
+			this.editorMemento.clearState(resource, group);
 		});
 	}
 

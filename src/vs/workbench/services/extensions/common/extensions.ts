@@ -116,6 +116,8 @@ export class ExtensionPointContribution<T> {
 	}
 }
 
+export const ExtensionHostLogFileName = 'exthost';
+
 export interface IExtensionService {
 	_serviceBrand: any;
 
@@ -170,6 +172,11 @@ export interface IExtensionService {
 	 * Begin an extension host process profile session.
 	 */
 	startExtensionHostProfile(): TPromise<ProfileSession>;
+
+	/**
+	 * Return the inspect port or 0.
+	 */
+	getInspectPort(): number;
 
 	/**
 	 * Restarts the extension host.

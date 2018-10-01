@@ -122,7 +122,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 			terminalService.openTerminal(root.fsPath);
 		} else {
 			// Opens current file's folder, if no folder is open in editor
-			const activeFile = historyService.getLastActiveFile();
+			const activeFile = historyService.getLastActiveFile(Schemas.file);
 			if (activeFile) {
 				terminalService.openTerminal(paths.dirname(activeFile.fsPath));
 			}
@@ -133,7 +133,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
 	command: {
 		id: OPEN_NATIVE_CONSOLE_COMMAND_ID,
-		title: nls.localize('globalConsoleAction', "Open New Terminal")
+		title: { value: nls.localize('globalConsoleAction', "Open New Terminal"), original: 'Open New Terminal' }
 	}
 });
 

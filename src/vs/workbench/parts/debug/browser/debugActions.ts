@@ -12,7 +12,7 @@ import { ICommandService } from 'vs/platform/commands/common/commands';
 import * as aria from 'vs/base/browser/ui/aria/aria';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { IFileService } from 'vs/platform/files/common/files';
-import { IDebugService, State, ISession, IThread, IEnablement, IBreakpoint, IStackFrame, REPL_ID }
+import { IDebugService, State, IDebugSession, IThread, IEnablement, IBreakpoint, IStackFrame, REPL_ID }
 	from 'vs/workbench/parts/debug/common/debug';
 import { Variable, Expression, Thread, Breakpoint } from 'vs/workbench/parts/debug/common/debugModel';
 import { IPartService } from 'vs/workbench/services/part/common/partService';
@@ -130,7 +130,8 @@ export class StartAction extends AbstractDebugAction {
 		super(id, label, 'debug-action start', debugService, keybindingService);
 
 		this.toDispose.push(this.debugService.getConfigurationManager().onDidSelectConfiguration(() => this.updateEnablement()));
-		this.toDispose.push(this.debugService.getModel().onDidChangeCallStack(() => this.updateEnablement()));
+		this.toDispose.push(this.debugService.onDidNewSession(() => this.updateEnablement()));
+		this.toDispose.push(this.debugService.onDidEndSession(() => this.updateEnablement()));
 		this.toDispose.push(this.contextService.onDidChangeWorkbenchState(() => this.updateEnablement()));
 	}
 
@@ -217,7 +218,7 @@ export class RestartAction extends AbstractDebugAction {
 	) {
 		super(id, label, 'debug-action restart', debugService, keybindingService, 70);
 		this.setLabel(this.debugService.getViewModel().focusedSession);
-		this.toDispose.push(this.debugService.getViewModel().onDidFocusStackFrame(() => this.setLabel(this.debugService.getViewModel().focusedSession)));
+		this.toDispose.push(this.debugService.getViewModel().onDidFocusSession(() => this.setLabel(this.debugService.getViewModel().focusedSession)));
 	}
 
 	@memoize
@@ -225,11 +226,11 @@ export class RestartAction extends AbstractDebugAction {
 		return new StartAction(StartAction.ID, StartAction.LABEL, this.debugService, this.keybindingService, this.contextService, this.historyService);
 	}
 
-	private setLabel(session: ISession): void {
+	private setLabel(session: IDebugSession): void {
 		this.updateLabel(session && session.configuration.request === 'attach' ? RestartAction.RECONNECT_LABEL : RestartAction.LABEL);
 	}
 
-	public run(session: ISession): TPromise<any> {
+	public run(session: IDebugSession): TPromise<any> {
 		if (!session || !session.getId) {
 			session = this.debugService.getViewModel().focusedSession;
 		}
@@ -324,7 +325,7 @@ export class StopAction extends AbstractDebugAction {
 		super(id, label, 'debug-action stop', debugService, keybindingService, 80);
 	}
 
-	public run(session: ISession): TPromise<any> {
+	public run(session: IDebugSession): TPromise<any> {
 		if (!session || !session.getId) {
 			session = this.debugService.getViewModel().focusedSession;
 		}
@@ -743,7 +744,7 @@ export class ToggleReplAction extends TogglePanelAction {
 export class FocusReplAction extends Action {
 
 	static readonly ID = 'workbench.debug.action.focusRepl';
-	static LABEL = nls.localize({ comment: ['Debug is a noun in this context, not a verb.'], key: 'debugFocusConsole' }, 'Focus Debug Console');
+	static LABEL = nls.localize({ comment: ['Debug is a noun in this context, not a verb.'], key: 'debugFocusConsole' }, 'Focus on Debug Console View');
 
 
 	constructor(id: string, label: string,
