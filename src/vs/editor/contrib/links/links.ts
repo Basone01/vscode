@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./links';
 import * as nls from 'vs/nls';
 import { onUnexpectedError } from 'vs/base/common/errors';
@@ -424,7 +422,7 @@ registerEditorContribution(LinkDetector);
 registerEditorAction(OpenLinkAction);
 
 registerThemingParticipant((theme, collector) => {
-	let activeLinkForeground = theme.getColor(editorActiveLinkForeground);
+	const activeLinkForeground = theme.getColor(editorActiveLinkForeground);
 	if (activeLinkForeground) {
 		collector.addRule(`.monaco-editor .detected-link-active { color: ${activeLinkForeground} !important; }`);
 	}

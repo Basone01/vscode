@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import * as fs from 'fs';
 import * as gracefulFs from 'graceful-fs';
 import { join, sep } from 'path';
@@ -504,7 +502,7 @@ class BatchedCollector<T> {
 	private totalNumberCompleted = 0;
 	private batch: T[] = [];
 	private batchSize = 0;
-	private timeoutHandle: number;
+	private timeoutHandle: any;
 
 	constructor(private maxBatchSize: number, private cb: (items: T | T[]) => void) {
 	}

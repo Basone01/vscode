@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { Emitter } from 'vs/base/common/event';
 import { TernarySearchTree } from 'vs/base/common/map';
@@ -62,6 +61,7 @@ import { ExtHostComments } from './extHostComments';
 import { ExtHostSearch } from './extHostSearch';
 import { ExtHostUrls } from './extHostUrls';
 import { localize } from 'vs/nls';
+import { ExtHostClipboard } from 'vs/workbench/api/node/extHostClipboard';
 
 export interface IExtensionApiFactory {
 	(extension: IExtensionDescription): typeof vscode;
@@ -135,6 +135,7 @@ export function createApiFactory(
 	rpcProtocol.assertRegistered(expected);
 
 	// Other instances
+	const extHostClipboard = new ExtHostClipboard(rpcProtocol);
 	const extHostMessageService = new ExtHostMessageService(rpcProtocol);
 	const extHostDialogs = new ExtHostDialogs(rpcProtocol);
 	const extHostStatusBar = new ExtHostStatusBar(rpcProtocol);
@@ -238,6 +239,10 @@ export function createApiFactory(
 			get onDidChangeLogLevel() {
 				checkProposedApiEnabled(extension);
 				return extHostLogService.onDidChangeLogLevel;
+			},
+			get clipboard(): vscode.Clipboard {
+				checkProposedApiEnabled(extension);
+				return extHostClipboard;
 			}
 		});
 
@@ -317,8 +322,11 @@ export function createApiFactory(
 			registerOnTypeFormattingEditProvider(selector: vscode.DocumentSelector, provider: vscode.OnTypeFormattingEditProvider, firstTriggerCharacter: string, ...moreTriggerCharacters: string[]): vscode.Disposable {
 				return extHostLanguageFeatures.registerOnTypeFormattingEditProvider(checkSelector(selector), provider, [firstTriggerCharacter].concat(moreTriggerCharacters));
 			},
-			registerSignatureHelpProvider(selector: vscode.DocumentSelector, provider: vscode.SignatureHelpProvider, ...triggerCharacters: string[]): vscode.Disposable {
-				return extHostLanguageFeatures.registerSignatureHelpProvider(checkSelector(selector), provider, triggerCharacters);
+			registerSignatureHelpProvider(selector: vscode.DocumentSelector, provider: vscode.SignatureHelpProvider, firstItem?: string | vscode.SignatureHelpProviderMetadata, ...remaining: string[]): vscode.Disposable {
+				if (typeof firstItem === 'object') {
+					return extHostLanguageFeatures.registerSignatureHelpProvider(checkSelector(selector), provider, firstItem);
+				}
+				return extHostLanguageFeatures.registerSignatureHelpProvider(checkSelector(selector), provider, typeof firstItem === 'undefined' ? [] : [firstItem, ...remaining]);
 			},
 			registerCompletionItemProvider(selector: vscode.DocumentSelector, provider: vscode.CompletionItemProvider, ...triggerCharacters: string[]): vscode.Disposable {
 				return extHostLanguageFeatures.registerCompletionItemProvider(checkSelector(selector), provider, triggerCharacters);
@@ -346,7 +354,7 @@ export function createApiFactory(
 				return extHostEditors.getVisibleTextEditors();
 			},
 			get activeTerminal() {
-				return proposedApiFunction(extension, extHostTerminalService.activeTerminal);
+				return extHostTerminalService.activeTerminal;
 			},
 			get terminals() {
 				return extHostTerminalService.terminals;
@@ -389,9 +397,9 @@ export function createApiFactory(
 			onDidOpenTerminal(listener, thisArg?, disposables?) {
 				return extHostTerminalService.onDidOpenTerminal(listener, thisArg, disposables);
 			},
-			onDidChangeActiveTerminal: proposedApiFunction(extension, (listener, thisArg?, disposables?) => {
+			onDidChangeActiveTerminal(listener, thisArg?, disposables?) {
 				return extHostTerminalService.onDidChangeActiveTerminal(listener, thisArg, disposables);
-			}),
+			},
 			get state() {
 				return extHostWindow.state;
 			},
@@ -470,7 +478,7 @@ export function createApiFactory(
 				return extHostUrls.registerUriHandler(extension.id, handler);
 			},
 			createQuickPick<T extends vscode.QuickPickItem>(): vscode.QuickPick<T> {
-				return extHostQuickOpen.createQuickPick(extension.id);
+				return extHostQuickOpen.createQuickPick(extension.id, extension.enableProposedApi);
 			},
 			createInputBox(): vscode.InputBox {
 				return extHostQuickOpen.createInputBox(extension.id);

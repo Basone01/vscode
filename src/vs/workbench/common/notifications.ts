@@ -3,15 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { INotification, INotificationHandle, INotificationActions, INotificationProgress, NoOpNotification, Severity, NotificationMessage, IPromptChoice } from 'vs/platform/notification/common/notification';
 import { toErrorMessage } from 'vs/base/common/errorMessage';
 import { Event, Emitter, once } from 'vs/base/common/event';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { isPromiseCanceledError, isErrorWithActions } from 'vs/base/common/errors';
 import { Action } from 'vs/base/common/actions';
-import { TPromise } from 'vs/base/common/winjs.base';
 
 export interface INotificationsModel {
 
@@ -564,7 +561,7 @@ export class ChoiceAction extends Action {
 			// Emit Event
 			this._onDidRun.fire();
 
-			return TPromise.as(void 0);
+			return Promise.resolve(void 0);
 		});
 
 		this._keepOpen = choice.keepOpen;

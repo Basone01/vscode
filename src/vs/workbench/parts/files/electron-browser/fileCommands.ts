@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import * as nls from 'vs/nls';
 import * as paths from 'vs/base/common/paths';
 import { TPromise } from 'vs/base/common/winjs.base';
@@ -162,7 +160,7 @@ function save(
 					}
 				};
 
-				return TPromise.join(editorGroupService.groups.map(g =>
+				return Promise.all(editorGroupService.groups.map(g =>
 					editorService.replaceEditors([{
 						editor: { resource },
 						replacement
@@ -183,7 +181,7 @@ function save(
 		return textFileService.save(resource, options);
 	}
 
-	return TPromise.as(false);
+	return Promise.resolve(false);
 }
 
 function saveAll(saveAllArguments: any, editorService: IEditorService, untitledEditorService: IUntitledEditorService,
@@ -247,7 +245,7 @@ CommandsRegistry.registerCommand({
 			});
 		}
 
-		return TPromise.as(true);
+		return Promise.resolve(true);
 	}
 });
 
@@ -281,7 +279,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 			});
 		}
 
-		return TPromise.as(true);
+		return Promise.resolve(true);
 	}
 });
 
@@ -310,7 +308,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 			return editorService.openEditor({ leftResource: uri.with({ scheme: COMPARE_WITH_SAVED_SCHEMA }), rightResource: uri, label: editorLabel }).then(() => void 0);
 		}
 
-		return TPromise.as(true);
+		return Promise.resolve(true);
 	}
 });
 
@@ -348,7 +346,7 @@ CommandsRegistry.registerCommand({
 			});
 		}
 
-		return TPromise.as(true);
+		return Promise.resolve(true);
 	}
 });
 

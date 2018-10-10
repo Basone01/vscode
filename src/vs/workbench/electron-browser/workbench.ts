@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./media/workbench';
 
 import { localize } from 'vs/nls';
@@ -114,7 +112,6 @@ import { IExtensionUrlHandler, ExtensionUrlHandler } from 'vs/workbench/services
 import { ContextViewService } from 'vs/platform/contextview/browser/contextViewService';
 import { WorkbenchThemeService } from 'vs/workbench/services/themes/electron-browser/workbenchThemeService';
 import { IWorkbenchThemeService } from 'vs/workbench/services/themes/common/workbenchThemeService';
-import { LabelService, ILabelService } from 'vs/platform/label/common/label';
 import { IFileDialogService } from 'vs/platform/dialogs/common/dialogs';
 import { FileDialogService } from 'vs/workbench/services/dialogs/electron-browser/dialogService';
 
@@ -227,6 +224,7 @@ export class Workbench extends Disposable implements IPartService {
 	private zenMode: IZenMode;
 	private fontAliasing: FontAliasingOption;
 	private hasInitialFilesToOpen: boolean;
+	private shouldCenterLayout = false;
 
 	private inZenMode: IContextKey<boolean>;
 	private sideBarVisibleContext: IContextKey<boolean>;
@@ -333,11 +331,7 @@ export class Workbench extends Disposable implements IPartService {
 		serviceCollection.set(IPartService, this);
 
 		// Clipboard
-		serviceCollection.set(IClipboardService, new ClipboardService());
-
-		// Uri Display
-		const labelService = new LabelService(this.environmentService, this.contextService);
-		serviceCollection.set(ILabelService, labelService);
+		serviceCollection.set(IClipboardService, new SyncDescriptor(ClipboardService));
 
 		// Status bar
 		this.statusbarPart = this.instantiationService.createInstance(StatusbarPart, Identifiers.STATUSBAR_PART);
@@ -664,8 +658,14 @@ export class Workbench extends Disposable implements IPartService {
 		this.editorPart.whenRestored.then(() => updateEditorContextKeys());
 		this._register(this.editorService.onDidActiveEditorChange(() => updateEditorContextKeys()));
 		this._register(this.editorService.onDidVisibleEditorsChange(() => updateEditorContextKeys()));
-		this._register(this.editorGroupService.onDidAddGroup(() => updateEditorContextKeys()));
-		this._register(this.editorGroupService.onDidRemoveGroup(() => updateEditorContextKeys()));
+		this._register(this.editorGroupService.onDidAddGroup(() => {
+			updateEditorContextKeys();
+			this.centerEditorLayout(this.shouldCenterLayout);
+		}));
+		this._register(this.editorGroupService.onDidRemoveGroup(() => {
+			updateEditorContextKeys();
+			this.centerEditorLayout(this.shouldCenterLayout);
+		}));
 
 		const inputFocused = InputFocusedContext.bindTo(this.contextKeyService);
 		this._register(DOM.addDisposableListener(window, 'focusin', () => {
@@ -767,7 +767,7 @@ export class Workbench extends Disposable implements IPartService {
 
 			return {
 				customKeybindingsCount: this.keybindingService.customKeybindingsCount(),
-				pinnedViewlets: this.activitybarPart.getPinned(),
+				pinnedViewlets: this.activitybarPart.getPinnedViewletIds(),
 				restoredViewlet: viewletIdToRestore,
 				restoredEditorsCount: this.editorService.visibleEditors.length
 			};
@@ -1312,17 +1312,25 @@ export class Workbench extends Disposable implements IPartService {
 	}
 
 	isEditorLayoutCentered(): boolean {
-		return this.editorPart.isLayoutCentered();
+		return this.shouldCenterLayout;
 	}
 
 	centerEditorLayout(active: boolean, skipLayout?: boolean): void {
 		this.storageService.store(Workbench.centeredEditorLayoutActiveStorageKey, active, StorageScope.WORKSPACE);
+		this.shouldCenterLayout = active;
+		let smartActive = active;
+		if (this.editorPart.groups.length > 1 && this.configurationService.getValue('workbench.editor.centeredLayoutAutoResize')) {
+			// Respect the auto resize setting - do not go into centered layout if there is more than 1 group.
+			smartActive = false;
+		}
 
 		// Enter Centered Editor Layout
-		this.editorPart.centerLayout(active);
+		if (this.editorPart.isLayoutCentered() !== smartActive) {
+			this.editorPart.centerLayout(smartActive);
 
-		if (!skipLayout) {
-			this.layout();
+			if (!skipLayout) {
+				this.layout();
+			}
 		}
 	}
 

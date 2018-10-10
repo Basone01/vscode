@@ -105,7 +105,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 				nls.localize('editBreakpoint', "Edit {0}...", breakpointType),
 				undefined,
 				true,
-				() => TPromise.as(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(breakpoints[0].lineNumber, breakpoints[0].column))
+				() => Promise.resolve(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(breakpoints[0].lineNumber, breakpoints[0].column))
 			));
 
 			actions.push(new Action(
@@ -130,7 +130,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 					bp.column ? nls.localize('editInlineBreakpointOnColumn', "Edit Inline Breakpoint on Column {0}", bp.column) : nls.localize('editLineBrekapoint', "Edit Line Breakpoint"),
 					null,
 					true,
-					() => TPromise.as(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(bp.lineNumber, bp.column))
+					() => Promise.resolve(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(bp.lineNumber, bp.column))
 				)
 			)));
 
@@ -155,18 +155,18 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 				nls.localize('addConditionalBreakpoint', "Add Conditional Breakpoint..."),
 				null,
 				true,
-				() => TPromise.as(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(lineNumber, undefined))
+				() => Promise.resolve(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(lineNumber, undefined))
 			));
 			actions.push(new Action(
 				'addLogPoint',
 				nls.localize('addLogPoint', "Add Logpoint..."),
 				null,
 				true,
-				() => TPromise.as(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.LOG_MESSAGE))
+				() => Promise.resolve(this.editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.LOG_MESSAGE))
 			));
 		}
 
-		return TPromise.as(actions);
+		return Promise.resolve(actions);
 	}
 
 	private registerListeners(): void {
@@ -203,22 +203,29 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 						const breakpointType = logPoint ? nls.localize('logPoint', "Logpoint") : nls.localize('breakpoint', "Breakpoint");
 						const disable = breakpoints.some(bp => bp.enabled);
 
-						this.dialogService.show(severity.Info, nls.localize('breakpointHasCondition', "This {0} has a {1} that will get lost on remove. Consider {2} the {0} instead.",
+						const enabling = nls.localize('breakpointHasConditionDisabled',
+							"This {0} has a {1} that will get lost on remove. Consider enabling the {0} instead.",
 							breakpointType.toLowerCase(),
-							logPoint ? nls.localize('message', "message") : nls.localize('condition', "condition"),
-							disable ? nls.localize('disabling', "disabling") : nls.localize('enabling', "enabling")
-						), [
-								nls.localize('removeLogPoint', "Remove {0}", breakpointType),
-								nls.localize('disableLogPoint', "{0} {1}", disable ? nls.localize('disable', "Disable") : nls.localize('enable', "Enable"), breakpointType),
-								nls.localize('cancel', "Cancel")
-							], { cancelId: 2 }).then(choice => {
-								if (choice === 0) {
-									breakpoints.forEach(bp => this.debugService.removeBreakpoints(bp.getId()));
-								}
-								if (choice === 1) {
-									breakpoints.forEach(bp => this.debugService.enableOrDisableBreakpoints(!disable, bp));
-								}
-							});
+							logPoint ? nls.localize('message', "message") : nls.localize('condition', "condition")
+						);
+						const disabling = nls.localize('breakpointHasConditionEnabled',
+							"This {0} has a {1} that will get lost on remove. Consider disabling the {0} instead.",
+							breakpointType.toLowerCase(),
+							logPoint ? nls.localize('message', "message") : nls.localize('condition', "condition")
+						);
+
+						this.dialogService.show(severity.Info, disable ? disabling : enabling, [
+							nls.localize('removeLogPoint', "Remove {0}", breakpointType),
+							nls.localize('disableLogPoint', "{0} {1}", disable ? nls.localize('disable', "Disable") : nls.localize('enable', "Enable"), breakpointType),
+							nls.localize('cancel', "Cancel")
+						], { cancelId: 2 }).then(choice => {
+							if (choice === 0) {
+								breakpoints.forEach(bp => this.debugService.removeBreakpoints(bp.getId()));
+							}
+							if (choice === 1) {
+								breakpoints.forEach(bp => this.debugService.enableOrDisableBreakpoints(!disable, bp));
+							}
+						});
 					} else {
 						breakpoints.forEach(bp => this.debugService.removeBreakpoints(bp.getId()));
 					}
@@ -551,7 +558,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 
 		this.editor.focus();
 		if (!configurationsArrayPosition) {
-			return TPromise.as(undefined);
+			return Promise.resolve(undefined);
 		}
 
 		const insertLine = (position: Position): TPromise<any> => {
@@ -610,7 +617,7 @@ export class DebugEditorContribution implements IDebugEditorContribution {
 
 		stackFrame.getMostSpecificScopes(stackFrame.range)
 			// Get all top level children in the scope chain
-			.then(scopes => TPromise.join(scopes.map(scope => scope.getChildren()
+			.then(scopes => Promise.all(scopes.map(scope => scope.getChildren()
 				.then(children => {
 					let range = new Range(0, 0, stackFrame.range.startLineNumber, stackFrame.range.startColumn);
 					if (scope.range) {

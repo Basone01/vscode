@@ -3,14 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-
-'use strict';
-
 import 'vs/css!./quickOutline';
 import * as nls from 'vs/nls';
 import { matchesFuzzy } from 'vs/base/common/filters';
 import * as strings from 'vs/base/common/strings';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { IContext, IHighlight, QuickOpenEntryGroup, QuickOpenModel } from 'vs/base/parts/quickopen/browser/quickOpenModel';
 import { IAutoFocus, Mode } from 'vs/base/parts/quickopen/common/quickOpen';
 import { ScrollType } from 'vs/editor/common/editorCommon';
@@ -132,7 +128,7 @@ export class QuickOutlineAction extends BaseEditorQuickOpenAction {
 		});
 	}
 
-	public run(accessor: ServicesAccessor, editor: ICodeEditor): TPromise<void> {
+	public run(accessor: ServicesAccessor, editor: ICodeEditor): Thenable<void> {
 
 		let model = editor.getModel();
 
@@ -141,13 +137,13 @@ export class QuickOutlineAction extends BaseEditorQuickOpenAction {
 		}
 
 		// Resolve outline
-		return TPromise.wrap(getDocumentSymbols(model, true, CancellationToken.None).then((result: DocumentSymbol[]) => {
+		return getDocumentSymbols(model, true, CancellationToken.None).then((result: DocumentSymbol[]) => {
 			if (result.length === 0) {
 				return;
 			}
 
 			this._run(editor, result);
-		}));
+		});
 	}
 
 	private _run(editor: ICodeEditor, result: DocumentSymbol[]): void {

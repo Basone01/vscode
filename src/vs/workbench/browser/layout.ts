@@ -2,9 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
-import { TPromise } from 'vs/base/common/winjs.base';
 import { QuickOpenController } from 'vs/workbench/browser/parts/quickopen/quickOpenController';
 import { QuickInputService } from 'vs/workbench/browser/parts/quickinput/quickInput';
 import { Sash, ISashEvent, IVerticalSashLayoutProvider, IHorizontalSashLayoutProvider, Orientation } from 'vs/base/browser/ui/sash/sash';
@@ -262,7 +260,7 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 			let sidebarPosition = this.partService.getSideBarPosition();
 			let isSidebarVisible = this.partService.isVisible(Parts.SIDEBAR_PART);
 			let newSashWidth = (sidebarPosition === Position.LEFT) ? startSidebarWidth + e.currentX - startX : startSidebarWidth - e.currentX + startX;
-			let promise = TPromise.wrap<void>(null);
+			let promise: Thenable<void> = Promise.resolve<void>(null);
 
 			// Sidebar visible
 			if (isSidebarVisible) {
@@ -301,7 +299,7 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 			let doLayout = false;
 			let isPanelVisible = this.partService.isVisible(Parts.PANEL_PART);
 			let newSashHeight = startPanelHeight - (e.currentY - startY);
-			let promise = TPromise.wrap<void>(null);
+			let promise: Thenable<void> = Promise.resolve<void>(null);
 
 			// Panel visible
 			if (isPanelVisible) {
@@ -339,7 +337,7 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 			let doLayout = false;
 			let isPanelVisible = this.partService.isVisible(Parts.PANEL_PART);
 			let newSashWidth = startPanelWidth - (e.currentX - startXTwo);
-			let promise = TPromise.wrap<void>(null);
+			let promise: Thenable<void> = Promise.resolve<void>(null);
 
 			// Panel visible
 			if (isPanelVisible) {
@@ -545,15 +543,6 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 		// Workbench
 		position(this.workbenchContainer, 0, 0, 0, 0, 'relative');
 		size(this.workbenchContainer, this.workbenchSize.width, this.workbenchSize.height);
-
-		// Bug on Chrome: Sometimes Chrome wants to scroll the workbench container on layout changes. The fix is to reset scrolling in this case.
-		const workbenchContainer = this.workbenchContainer;
-		if (workbenchContainer.scrollTop > 0) {
-			workbenchContainer.scrollTop = 0;
-		}
-		if (workbenchContainer.scrollLeft > 0) {
-			workbenchContainer.scrollLeft = 0;
-		}
 
 		// Title Part
 		const titleContainer = this.parts.titlebar.getContainer();

@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./media/notificationsToasts';
 import { INotificationsModel, NotificationChangeType, INotificationChangeEvent, INotificationViewItem, NotificationViewItemLabelKind } from 'vs/workbench/common/notifications';
 import { IDisposable, dispose, toDisposable } from 'vs/base/common/lifecycle';
@@ -188,7 +186,7 @@ export class NotificationsToasts extends Themable {
 			itemDisposeables.push(addDisposableListener(notificationToastContainer, EventType.MOUSE_OUT, () => isMouseOverToast = false));
 
 			// Install Timers
-			let timeoutHandle: number;
+			let timeoutHandle: any;
 			const hideAfterTimeout = () => {
 				timeoutHandle = setTimeout(() => {
 					const showsProgress = item.hasProgress() && !item.progress.state.done;

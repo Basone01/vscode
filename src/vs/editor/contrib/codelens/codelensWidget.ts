@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./codelensWidget';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { format, escape } from 'vs/base/common/strings';
@@ -323,11 +321,11 @@ export class CodeLens {
 }
 
 registerThemingParticipant((theme, collector) => {
-	let codeLensForeground = theme.getColor(editorCodeLensForeground);
+	const codeLensForeground = theme.getColor(editorCodeLensForeground);
 	if (codeLensForeground) {
 		collector.addRule(`.monaco-editor .codelens-decoration { color: ${codeLensForeground}; }`);
 	}
-	let activeLinkForeground = theme.getColor(editorActiveLinkForeground);
+	const activeLinkForeground = theme.getColor(editorActiveLinkForeground);
 	if (activeLinkForeground) {
 		collector.addRule(`.monaco-editor .codelens-decoration > a:hover { color: ${activeLinkForeground} !important; }`);
 	}

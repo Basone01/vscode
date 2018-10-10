@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
 import { Position } from 'vs/editor/common/core/position';
@@ -139,7 +138,7 @@ export class ViewCursor {
 				width = dom.computeScreenAwareSize(1);
 			}
 			let left = visibleRange.left;
-			if (width >= 2) {
+			if (width >= 2 && left >= 1) {
 				// try to center cursor
 				left -= 1;
 			}

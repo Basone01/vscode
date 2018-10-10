@@ -131,7 +131,7 @@ class BaseTreeItem {
 			return child.getChildren();
 		}
 		const array = Object.keys(this._children).map(key => this._children[key]);
-		return TPromise.as(array.sort((a, b) => this.compare(a, b)));
+		return Promise.resolve(array.sort((a, b) => this.compare(a, b)));
 	}
 
 	// skips intermediate single-child nodes
@@ -226,7 +226,7 @@ class SessionTreeItem extends BaseTreeItem {
 	private _map: Map<string, BaseTreeItem>;
 
 	constructor(parent: BaseTreeItem, session: IDebugSession, private _environmentService: IEnvironmentService, private rootProvider: IWorkspaceContextService) {
-		super(parent, session.getName(true));
+		super(parent, session.getLabel());
 		this._initialized = false;
 		this._session = session;
 		this._map = new Map();
@@ -492,7 +492,7 @@ class LoadedScriptsDataSource implements IDataSource {
 	}
 
 	getParent(tree: ITree, element: any): TPromise<any> {
-		return TPromise.as(element.getParent());
+		return Promise.resolve(element.getParent());
 	}
 
 	shouldAutoexpand?(tree: ITree, element: any): boolean {

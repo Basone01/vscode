@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { CharCode } from 'vs/base/common/charCode';
 
@@ -99,10 +98,9 @@ export function ltrim(haystack?: string, needle?: string): string {
 		return haystack;
 	}
 
-	let offset = 0,
-		idx = -1;
+	let offset = 0;
 
-	while ((idx = haystack.indexOf(needle, offset)) === offset) {
+	while (haystack.indexOf(needle, offset) === offset) {
 		offset = offset + needleLen;
 	}
 	return haystack.substring(offset);
@@ -688,4 +686,20 @@ export function containsUppercaseCharacter(target: string, ignoreEscapedChars = 
 
 export function uppercaseFirstLetter(str: string): string {
 	return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function getNLines(str: string, n = 1): string {
+	if (n === 0) {
+		return '';
+	}
+
+	let idx = -1;
+	do {
+		idx = str.indexOf('\n', idx + 1);
+		n--;
+	} while (n > 0 && idx >= 0);
+
+	return idx >= 0 ?
+		str.substr(0, idx) :
+		str;
 }

@@ -2,19 +2,18 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { basename, extname, join } from 'path';
 import { MarkdownString } from 'vs/base/common/htmlContent';
 import { IJSONSchema } from 'vs/base/common/jsonSchema';
-import { dispose, IDisposable } from 'vs/base/common/lifecycle';
+import { dispose, IDisposable, combinedDisposable } from 'vs/base/common/lifecycle';
 import { values } from 'vs/base/common/map';
 import * as resources from 'vs/base/common/resources';
 import { compare, endsWith, isFalsyOrWhitespace } from 'vs/base/common/strings';
 import { URI } from 'vs/base/common/uri';
 import { Position } from 'vs/editor/common/core/position';
 import { ITextModel } from 'vs/editor/common/model';
-import { ISuggestion, ISuggestResult, ISuggestSupport, LanguageId, SuggestContext, SuggestionKind } from 'vs/editor/common/modes';
+import { CompletionItem, CompletionList, CompletionItemProvider, LanguageId, CompletionItemKind } from 'vs/editor/common/modes';
 import { IModeService } from 'vs/editor/common/services/modeService';
 import { SnippetParser } from 'vs/editor/contrib/snippet/snippetParser';
 import { setSnippetSuggestSupport } from 'vs/editor/contrib/suggest/suggest';
@@ -30,8 +29,9 @@ import { ExtensionsRegistry, IExtensionPointUser } from 'vs/workbench/services/e
 import { languagesExtPoint } from 'vs/workbench/services/mode/common/workbenchModeService';
 import { IWorkspaceContextService, IWorkspace } from 'vs/platform/workspace/common/workspace';
 import { isFalsyOrEmpty } from 'vs/base/common/arrays';
+import { IRange, Range } from 'vs/editor/common/core/range';
 
-namespace schema {
+namespace snippetExt {
 
 	export interface ISnippetsExtensionPoint {
 		language: string;
@@ -109,6 +109,8 @@ namespace schema {
 			}
 		}
 	};
+
+	export const point = ExtensionsRegistry.registerExtensionPoint<snippetExt.ISnippetsExtensionPoint[]>('snippets', [languagesExtPoint], snippetExt.snippetsContribution);
 }
 
 function watch(service: IFileService, resource: URI, callback: (type: FileChangeType, resource: URI) => any): IDisposable {
@@ -197,10 +199,10 @@ class SnippetsService implements ISnippetsService {
 	// --- loading, watching
 
 	private _initExtensionSnippets(): void {
-		ExtensionsRegistry.registerExtensionPoint<schema.ISnippetsExtensionPoint[]>('snippets', [languagesExtPoint], schema.snippetsContribution).setHandler(extensions => {
+		snippetExt.point.setHandler(extensions => {
 			for (const extension of extensions) {
 				for (const contribution of extension.value) {
-					const validContribution = schema.toValidSnippet(extension, contribution, this._modeService);
+					const validContribution = snippetExt.toValidSnippet(extension, contribution, this._modeService);
 					if (!validContribution) {
 						continue;
 					}
@@ -278,58 +280,37 @@ class SnippetsService implements ISnippetsService {
 	}
 
 	private _initFolderSnippets(source: SnippetSource, folder: URI, bucket: IDisposable[]): Thenable<any> {
-		const addUserSnippet = (filepath: URI) => {
-			const ext = extname(filepath.path);
-			if (source === SnippetSource.User && ext === '.json') {
-				const langName = basename(filepath.path, '.json');
-				this._files.set(filepath.toString(), new SnippetFile(source, filepath, [langName], undefined, this._fileService));
-
-			} else if (ext === '.code-snippets') {
-				this._files.set(filepath.toString(), new SnippetFile(source, filepath, undefined, undefined, this._fileService));
-			}
+		let disposables: IDisposable[] = [];
+		let addFolderSnippets = () => {
+			disposables = dispose(disposables);
+			return this._fileService.resolveFile(folder).then(stat => {
+				if (!isFalsyOrEmpty(stat.children)) {
+					for (const entry of stat.children) {
+						disposables.push(this._addSnippetFile(entry.resource, source));
+					}
+				}
+			}, err => {
+				this._logService.error(`Failed snippets from folder '${folder.toString()}'`, err);
+			});
 		};
 
-		return this._fileService.resolveFile(folder).then(stat => {
-			if (!isFalsyOrEmpty(stat.children)) {
-				for (const entry of stat.children) {
-					addUserSnippet(entry.resource);
-				}
-			}
-		}).then(() => {
-			// watch
-			bucket.push(watch(this._fileService, folder, (_type, filename) => {
+		bucket.push(watch(this._fileService, folder, addFolderSnippets));
+		bucket.push(combinedDisposable(disposables));
+		return addFolderSnippets();
+	}
 
-				this._fileService.existsFile(filename).then(value => {
-					if (value) {
-						// file created or changed
-						if (this._files.has(filename.toString())) {
-							this._files.get(filename.toString()).reset();
-						} else {
-							addUserSnippet(filename);
-						}
-					} else {
-						// file not found
-						this._files.delete(filename.toString());
-					}
-				});
-			}));
-
-			bucket.push({
-				dispose: () => {
-					// add a disposable that removes all snippets
-					// from this folder. that ensures snippets disappear
-					// when the folder goes away
-					this._files.forEach((value, index) => {
-						if (resources.isEqualOrParent(value.location, folder)) {
-							this._files.delete(index);
-						}
-					});
-				}
-			});
-
-		}).then(undefined, err => {
-			this._logService.error(`Failed snippets from folder '${folder.toString()}'`, err);
-		});
+	private _addSnippetFile(uri: URI, source: SnippetSource): IDisposable {
+		const ext = extname(uri.path);
+		const key = uri.toString();
+		if (source === SnippetSource.User && ext === '.json') {
+			const langName = basename(uri.path, '.json');
+			this._files.set(key, new SnippetFile(source, uri, [langName], undefined, this._fileService));
+		} else if (ext === '.code-snippets') {
+			this._files.set(key, new SnippetFile(source, uri, undefined, undefined, this._fileService));
+		}
+		return {
+			dispose: () => this._files.delete(key)
+		};
 	}
 }
 
@@ -339,29 +320,29 @@ export interface ISimpleModel {
 	getLineContent(lineNumber: number): string;
 }
 
-export class SnippetSuggestion implements ISuggestion {
+export class SnippetSuggestion implements CompletionItem {
 
 	label: string;
 	detail: string;
 	insertText: string;
 	documentation: MarkdownString;
-	overwriteBefore: number;
+	range: IRange;
 	sortText: string;
 	noAutoAccept: boolean;
-	kind: SuggestionKind;
+	kind: CompletionItemKind;
 	insertTextIsSnippet: true;
 
 	constructor(
 		readonly snippet: Snippet,
-		overwriteBefore: number
+		range: IRange
 	) {
 		this.label = snippet.prefix;
 		this.detail = localize('detail.snippet', "{0} ({1})", snippet.description || snippet.name, snippet.source);
 		this.insertText = snippet.body;
-		this.overwriteBefore = overwriteBefore;
+		this.range = range;
 		this.sortText = `${snippet.snippetSource === SnippetSource.Extension ? 'z' : 'a'}-${snippet.prefix}`;
 		this.noAutoAccept = true;
-		this.kind = SuggestionKind.Snippet;
+		this.kind = CompletionItemKind.Snippet;
 		this.insertTextIsSnippet = true;
 	}
 
@@ -377,7 +358,7 @@ export class SnippetSuggestion implements ISuggestion {
 }
 
 
-export class SnippetSuggestProvider implements ISuggestSupport {
+export class SnippetSuggestProvider implements CompletionItemProvider {
 
 	constructor(
 		@IModeService private readonly _modeService: IModeService,
@@ -386,53 +367,35 @@ export class SnippetSuggestProvider implements ISuggestSupport {
 		//
 	}
 
-	provideCompletionItems(model: ITextModel, position: Position, context: SuggestContext): Promise<ISuggestResult> {
+	provideCompletionItems(model: ITextModel, pos: Position): Promise<CompletionList> {
 
-		const languageId = this._getLanguageIdAtPosition(model, position);
+		const languageId = this._getLanguageIdAtPosition(model, pos);
 		return this._snippets.getSnippets(languageId).then(snippets => {
 
-			let suggestions: SnippetSuggestion[];
-			let shift = Math.max(0, position.column - 100);
-			let pos = { lineNumber: position.lineNumber, column: Math.max(1, position.column - 100) };
-			let lineOffsets: number[] = [];
-			let linePrefixLow = model.getLineContent(position.lineNumber).substr(Math.max(0, position.column - 100), position.column - 1).toLowerCase();
+			let suggestions: SnippetSuggestion[] = [];
+			let atWord = Boolean(model.getWordAtPosition(pos));
+			let lineLow = model.getLineContent(pos.lineNumber).substring(0, pos.column - 1).toLowerCase();
 
-			while (pos.column < position.column) {
-				let word = model.getWordAtPosition(pos);
-				if (word) {
-					// at a word
-					lineOffsets.push(word.startColumn - 1);
-					pos.column = word.endColumn + 1;
+			for (const snippet of snippets) {
 
-					if (word.endColumn - 1 < linePrefixLow.length && !/\s/.test(linePrefixLow[word.endColumn - 1])) {
-						lineOffsets.push(word.endColumn - 1);
+				let prefixLow = snippet.prefix;
+				let prefixPos = prefixLow.length - 1;
+				let linePos = lineLow.length - 1;
+				let linePosStart = linePos;
+				while (linePos >= 0 && prefixPos >= 0) {
+					if (lineLow[linePos] === prefixLow[prefixPos]) {
+						linePos -= 1;
 					}
-
-				} else if (!/\s/.test(linePrefixLow[pos.column - 1])) {
-					// at a none-whitespace character
-					lineOffsets.push(pos.column - 1);
-					pos.column += 1;
-				} else {
-					// always advance!
-					pos.column += 1;
+					prefixPos -= 1;
 				}
-			}
 
-			if (lineOffsets.length === 0) {
-				// no interesting spans found -> pick all snippets
-				suggestions = snippets.map(snippet => new SnippetSuggestion(snippet, 0));
+				if (linePos !== linePosStart) {
+					// some overlap
+					suggestions.push(new SnippetSuggestion(snippet, Range.fromPositions(pos.delta(0, linePos - linePosStart), pos)));
 
-			} else {
-				let consumed = new Set<Snippet>();
-				suggestions = [];
-				for (let start of lineOffsets) {
-					start -= shift;
-					for (const snippet of snippets) {
-						if (!consumed.has(snippet) && matches(linePrefixLow, start, snippet.prefixLow, 0)) {
-							suggestions.push(new SnippetSuggestion(snippet, linePrefixLow.length - start));
-							consumed.add(snippet);
-						}
-					}
+				} else if (!atWord) {
+					// no overlap but not at a word
+					suggestions.push(new SnippetSuggestion(snippet, Range.fromPositions(pos)));
 				}
 			}
 
@@ -454,7 +417,7 @@ export class SnippetSuggestProvider implements ISuggestSupport {
 		});
 	}
 
-	resolveCompletionItem?(model: ITextModel, position: Position, item: ISuggestion): ISuggestion {
+	resolveCompletionItem?(model: ITextModel, position: Position, item: CompletionItem): CompletionItem {
 		return (item instanceof SnippetSuggestion) ? item.resolve() : item;
 	}
 
@@ -470,16 +433,6 @@ export class SnippetSuggestProvider implements ISuggestSupport {
 		}
 		return languageId;
 	}
-}
-
-function matches(pattern: string, patternStart: number, word: string, wordStart: number): boolean {
-	while (patternStart < pattern.length && wordStart < word.length) {
-		if (pattern[patternStart] === word[wordStart]) {
-			patternStart += 1;
-		}
-		wordStart += 1;
-	}
-	return patternStart === pattern.length;
 }
 
 export function getNonWhitespacePrefix(model: ISimpleModel, position: Position): string {

@@ -45,11 +45,13 @@ interface IItem<T> {
 export interface IListViewOptions {
 	useShadows?: boolean;
 	verticalScrollMode?: ScrollbarVisibility;
+	setRowLineHeight?: boolean;
 }
 
 const DefaultOptions: IListViewOptions = {
 	useShadows: true,
-	verticalScrollMode: ScrollbarVisibility.Auto
+	verticalScrollMode: ScrollbarVisibility.Auto,
+	setRowLineHeight: true
 };
 
 export class ListView<T> implements ISpliceable<T>, IDisposable {
@@ -65,10 +67,13 @@ export class ListView<T> implements ISpliceable<T>, IDisposable {
 	private gesture: Gesture;
 	private rowsContainer: HTMLElement;
 	private scrollableElement: ScrollableElement;
+	private scrollHeight: number;
+	private didRequestScrollableElementUpdate: boolean = false;
 	private splicing = false;
 	private dragAndDropScrollInterval: number;
 	private dragAndDropScrollTimeout: number;
 	private dragAndDropMouseY: number;
+	private setRowLineHeight: boolean;
 	private disposables: IDisposable[];
 
 	constructor(
@@ -119,6 +124,8 @@ export class ListView<T> implements ISpliceable<T>, IDisposable {
 
 		const onDragOver = mapEvent(domEvent(this.rowsContainer, 'dragover'), e => new DragMouseEvent(e));
 		onDragOver(this.onDragOver, this, this.disposables);
+
+		this.setRowLineHeight = getOrDefault(options, o => o.setRowLineHeight, DefaultOptions.setRowLineHeight);
 
 		this.layout();
 	}
@@ -197,9 +204,17 @@ export class ListView<T> implements ISpliceable<T>, IDisposable {
 			}
 		}
 
-		const scrollHeight = this.getContentHeight();
-		this.rowsContainer.style.height = `${scrollHeight}px`;
-		this.scrollableElement.setScrollDimensions({ scrollHeight });
+		this.scrollHeight = this.getContentHeight();
+		this.rowsContainer.style.height = `${this.scrollHeight}px`;
+
+		if (!this.didRequestScrollableElementUpdate) {
+			DOM.scheduleAtNextAnimationFrame(() => {
+				this.scrollableElement.setScrollDimensions({ scrollHeight: this.scrollHeight });
+				this.didRequestScrollableElementUpdate = false;
+			});
+
+			this.didRequestScrollableElementUpdate = true;
+		}
 
 		return deleted.map(i => i.element);
 	}
@@ -296,6 +311,11 @@ export class ListView<T> implements ISpliceable<T>, IDisposable {
 		}
 
 		item.row.domNode.style.height = `${item.size}px`;
+
+		if (this.setRowLineHeight) {
+			item.row.domNode.style.lineHeight = `${item.size}px`;
+		}
+
 		this.updateItemInDOM(item, index);
 
 		const renderer = this.renderers.get(item.templateId);
@@ -347,7 +367,7 @@ export class ListView<T> implements ISpliceable<T>, IDisposable {
 
 	@memoize get onMouseClick(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'click'), e => this.toMouseEvent(e)), e => e.index >= 0); }
 	@memoize get onMouseDblClick(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'dblclick'), e => this.toMouseEvent(e)), e => e.index >= 0); }
-	@memoize get onMouseMiddleClick(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'auxclick'), e => this.toMouseEvent(e)), e => e.index >= 0 && e.browserEvent.button === 1); }
+	@memoize get onMouseMiddleClick(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'auxclick'), e => this.toMouseEvent(e as MouseEvent)), e => e.index >= 0 && e.browserEvent.button === 1); }
 	@memoize get onMouseUp(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'mouseup'), e => this.toMouseEvent(e)), e => e.index >= 0); }
 	@memoize get onMouseDown(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'mousedown'), e => this.toMouseEvent(e)), e => e.index >= 0); }
 	@memoize get onMouseOver(): Event<IListMouseEvent<T>> { return filterEvent(mapEvent(domEvent(this.domNode, 'mouseover'), e => this.toMouseEvent(e)), e => e.index >= 0); }

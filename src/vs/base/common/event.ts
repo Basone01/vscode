@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { once as onceFn } from 'vs/base/common/functional';
@@ -264,17 +263,6 @@ export class EventMultiplexer<T> implements IDisposable {
 	dispose(): void {
 		this.emitter.dispose();
 	}
-}
-
-export function fromCallback<T>(fn: (handler: (e: T) => void) => IDisposable): Event<T> {
-	let listener: IDisposable;
-
-	const emitter = new Emitter<T>({
-		onFirstListenerAdd: () => listener = fn(e => emitter.fire(e)),
-		onLastListenerRemove: () => listener.dispose()
-	});
-
-	return emitter.event;
 }
 
 export function fromPromise<T =any>(promise: Thenable<T>): Event<T> {

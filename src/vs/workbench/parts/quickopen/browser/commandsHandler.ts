@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { TPromise } from 'vs/base/common/winjs.base';
 import * as nls from 'vs/nls';
 import * as arrays from 'vs/base/common/arrays';
@@ -306,7 +304,7 @@ abstract class BaseCommandEntry extends QuickOpenEntryGroup {
 						}
 					*/
 					this.telemetryService.publicLog('workbenchActionExecuted', { id: action.id, from: 'quick open' });
-					(action.run() || TPromise.as(null)).then(() => {
+					(action.run() || Promise.resolve()).then(() => {
 						if (action instanceof Action) {
 							action.dispose();
 						}

@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { CancellationToken, CancellationTokenSource } from 'vs/base/common/cancellation';
 import * as errors from 'vs/base/common/errors';
 import { Emitter, Event } from 'vs/base/common/event';
@@ -176,7 +174,7 @@ export class SimpleThrottler {
  */
 export class Delayer<T> {
 
-	private timeout: number;
+	private timeout: any;
 	private completionPromise: TPromise;
 	private doResolve: ValueCallback;
 	private doReject: (err: any) => void;
@@ -307,6 +305,15 @@ export function timeout(millis: number, token?: CancellationToken): CancelablePr
 	});
 }
 
+export function disposableTimeout(handler: Function, timeout = 0): IDisposable {
+	const timer = setTimeout(handler, timeout);
+	return {
+		dispose() {
+			clearTimeout(timer);
+		}
+	};
+}
+
 /**
  * Returns a new promise that joins the provided promise. Upon completion of
  * the provided promise the provided function will always be called. This
@@ -314,9 +321,7 @@ export function timeout(millis: number, token?: CancellationToken): CancelablePr
  * @param promise a promise
  * @param callback a function that will be call in the success and error case.
  */
-export function always<T>(thenable: TPromise<T>, callback: () => void): TPromise<T>;
-export function always<T>(promise: Thenable<T>, callback: () => void): Thenable<T>;
-export function always<T>(winjsPromiseOrThenable: Thenable<T>, callback: () => void) {
+export function always<T>(promise: Thenable<T>, callback: () => void): Promise<T> {
 	function safeCallback() {
 		try {
 			callback();
@@ -324,8 +329,8 @@ export function always<T>(winjsPromiseOrThenable: Thenable<T>, callback: () => v
 			errors.onUnexpectedError(err);
 		}
 	}
-	winjsPromiseOrThenable.then(_ => safeCallback(), _ => safeCallback());
-	return winjsPromiseOrThenable;
+	promise.then(_ => safeCallback(), _ => safeCallback());
+	return Promise.resolve(promise);
 }
 
 /**
@@ -486,7 +491,7 @@ export class ResourceQueue {
 }
 
 export class TimeoutTimer extends Disposable {
-	private _token: number;
+	private _token: any;
 
 	constructor();
 	constructor(runner: () => void, timeout: number);
@@ -533,7 +538,7 @@ export class TimeoutTimer extends Disposable {
 
 export class IntervalTimer extends Disposable {
 
-	private _token: number;
+	private _token: any;
 
 	constructor() {
 		super();
@@ -564,7 +569,7 @@ export class RunOnceScheduler {
 
 	protected runner: (...args: any[]) => void;
 
-	private timeoutToken: number;
+	private timeoutToken: any;
 	private timeout: number;
 	private timeoutHandler: () => void;
 
@@ -649,8 +654,8 @@ export class RunOnceWorker<T> extends RunOnceScheduler {
 	}
 }
 
-export function nfcall(fn: Function, ...args: any[]): TPromise;
-export function nfcall<T>(fn: Function, ...args: any[]): TPromise<T>;
+export function nfcall(fn: Function, ...args: any[]): Promise<any>;
+export function nfcall<T>(fn: Function, ...args: any[]): Promise<T>;
 export function nfcall(fn: Function, ...args: any[]): any {
 	return new TPromise((c, e) => fn(...args, (err: any, result: any) => err ? e(err) : c(result)));
 }

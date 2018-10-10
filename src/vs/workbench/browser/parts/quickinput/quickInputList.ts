@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./quickInput';
 import { IVirtualDelegate, IRenderer } from 'vs/base/browser/ui/list/list';
 import * as dom from 'vs/base/browser/dom';
@@ -49,7 +47,6 @@ class ListElement implements IListElement {
 	saneLabel: string;
 	saneDescription?: string;
 	saneDetail?: string;
-	shouldAlwaysShow = false;
 	hidden = false;
 	private _onChecked = new Emitter<boolean>();
 	onChecked = this._onChecked.event;
@@ -285,11 +282,6 @@ export class QuickInputList {
 				this._onLeave.fire();
 			}
 		}));
-		this.disposables.push(this.list.onSelectionChange(e => {
-			if (e.elements.length) {
-				this.list.setSelection([]);
-			}
-		}));
 	}
 
 	@memoize
@@ -382,8 +374,8 @@ export class QuickInputList {
 			map.set(element.item, index);
 			return map;
 		}, new Map<IQuickPickItem, number>());
+		this.list.splice(0, this.list.length); // Clear focus and selection first, sending the events when the list is empty.
 		this.list.splice(0, this.list.length, this.elements);
-		this.list.setFocus([]);
 		this._onChangedVisibleCount.fire(this.elements.length);
 	}
 
@@ -488,7 +480,7 @@ export class QuickInputList {
 				const descriptionHighlights = this.matchOnDescription ? matchesFuzzyOcticonAware(query, parseOcticons(element.saneDescription || '')) : undefined;
 				const detailHighlights = this.matchOnDetail ? matchesFuzzyOcticonAware(query, parseOcticons(element.saneDetail || '')) : undefined;
 
-				if (element.shouldAlwaysShow || labelHighlights || descriptionHighlights || detailHighlights) {
+				if (labelHighlights || descriptionHighlights || detailHighlights) {
 					element.labelHighlights = labelHighlights;
 					element.descriptionHighlights = descriptionHighlights;
 					element.detailHighlights = detailHighlights;

@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { posix } from 'path';
 import * as dom from 'vs/base/browser/dom';
@@ -127,7 +126,7 @@ class RequestOracle {
 		this._lastState = thisState;
 		this._callback(codeEditor, undefined);
 
-		let handle: number;
+		let handle: any;
 		let contentListener = codeEditor.onDidChangeModelContent(event => {
 			clearTimeout(handle);
 			handle = setTimeout(() => this._callback(codeEditor, event), 350);
@@ -232,6 +231,7 @@ export class OutlinePanel extends ViewletPanel {
 	private _outlineViewState = new OutlineViewState();
 	private _requestOracle: RequestOracle;
 	private _cachedHeight: number;
+	private _pendingLayout: IDisposable;
 	private _domNode: HTMLElement;
 	private _message: HTMLDivElement;
 	private _inputContainer: HTMLDivElement;
@@ -376,21 +376,37 @@ export class OutlinePanel extends ViewletPanel {
 		}));
 	}
 
-	protected layoutBody(height: number = this._cachedHeight): void {
-		this._cachedHeight = height;
-		this._input.layout();
-		this._tree.layout(height - (dom.getTotalHeight(this._inputContainer) + 5 /*progressbar height, defined in outlinePanel.css*/));
+	protected layoutBody(height: number): void {
+		if (height !== this._cachedHeight) {
+			this._cachedHeight = height;
+			if (this._pendingLayout) {
+				this._pendingLayout.dispose();
+			}
+			this._pendingLayout = dom.measure(() => {
+				// this._input.layout();
+				const inputHeight = dom.getTotalHeight(this._inputContainer);
+				this._tree.layout(height - (inputHeight + 5 /*progressbar height, defined in outlinePanel.css*/));
+			});
+		}
 	}
 
 	setVisible(visible: boolean): TPromise<void> {
-		if (visible) {
+		if (visible && this.isExpanded() && !this._requestOracle) {
+			// workaround for https://github.com/Microsoft/vscode/issues/60011
+			this.setExpanded(true);
+		}
+		return super.setVisible(visible);
+	}
+
+	setExpanded(expanded: boolean): void {
+		if (expanded) {
 			this._requestOracle = this._requestOracle || this._instantiationService.createInstance(RequestOracle, (editor, event) => this._doUpdate(editor, event).then(undefined, onUnexpectedError), DocumentSymbolProviderRegistry);
 		} else {
 			dispose(this._requestOracle);
 			this._requestOracle = undefined;
 			this._doUpdate(undefined, undefined);
 		}
-		return super.setVisible(visible);
+		return super.setExpanded(expanded);
 	}
 
 	getActions(): IAction[] {
@@ -540,7 +556,7 @@ export class OutlinePanel extends ViewletPanel {
 		}
 
 		this._input.enable();
-		this.layoutBody();
+		this.layoutBody(this._cachedHeight);
 
 		// transfer focus from domNode to the tree
 		if (this._domNode === document.activeElement) {

@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { Event } from 'vs/base/common/event';
 import { IExpression } from 'vs/base/common/glob';
 import { TPromise } from 'vs/base/common/winjs.base';
@@ -17,6 +15,7 @@ export interface IFolderSearch {
 	includePattern?: IExpression;
 	fileEncoding?: string;
 	disregardIgnoreFiles?: boolean;
+	disregardGlobalIgnoreFiles?: boolean;
 }
 
 export interface IRawSearch {
@@ -35,6 +34,7 @@ export interface IRawSearch {
 	useRipgrep?: boolean;
 	disregardIgnoreFiles?: boolean;
 	previewOptions?: ITextSearchPreviewOptions;
+	disregardGlobalIgnoreFiles?: boolean;
 }
 
 export interface ITelemetryEvent {

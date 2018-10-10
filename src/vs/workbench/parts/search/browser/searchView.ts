@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import * as browser from 'vs/base/browser/browser';
 import * as dom from 'vs/base/browser/dom';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
@@ -173,13 +171,13 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 		}
 	}
 
-	public create(parent: HTMLElement): TPromise<void> {
+	public create(parent: HTMLElement): Promise<void> {
 		super.create(parent);
 
 		this.viewModel = this._register(this.searchWorkbenchService.searchModel);
-		const containerElement = dom.append(parent, $('.search-view'));
+		dom.addClass(parent, 'search-view');
 
-		this.searchWidgetsContainerElement = dom.append(containerElement, $('.search-widgets-container'));
+		this.searchWidgetsContainerElement = dom.append(parent, $('.search-widgets-container'));
 		this.createSearchWidget(this.searchWidgetsContainerElement);
 
 		const history = this.searchHistoryService.load();
@@ -256,12 +254,12 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 		this.inputPatternExcludes.onCancel(() => this.viewModel.cancelSearch()); // Cancel search without focusing the search widget
 		this.trackInputBox(this.inputPatternExcludes.inputFocusTracker, this.inputPatternExclusionsFocused);
 
-		this.messagesElement = dom.append(containerElement, $('.messages'));
+		this.messagesElement = dom.append(parent, $('.messages'));
 		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
 			this.showSearchWithoutFolderMessage();
 		}
 
-		this.createSearchResultsView(containerElement);
+		this.createSearchResultsView(parent);
 
 		this.actions = [
 			this.instantiationService.createInstance(RefreshAction, RefreshAction.ID, RefreshAction.LABEL),
@@ -278,7 +276,7 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 		this._register(this.onDidFocus(() => this.viewletFocused.set(true)));
 		this._register(this.onDidBlur(() => this.viewletFocused.set(false)));
 
-		return TPromise.as(null);
+		return Promise.resolve(null);
 	}
 
 	public get searchAndReplaceWidget(): SearchWidget {
@@ -520,7 +518,7 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 	private createSearchResultsView(container: HTMLElement): void {
 		this.resultsElement = dom.append(container, $('.results.show-file-icons'));
 		const dataSource = this._register(this.instantiationService.createInstance(SearchDataSource));
-		const renderer = this._register(this.instantiationService.createInstance(SearchRenderer, this.getActionRunner(), this));
+		const renderer = this._register(this.instantiationService.createInstance(SearchRenderer, this));
 		const dnd = this.instantiationService.createInstance(SimpleFileResourceDragAndDrop, (obj: any) => obj instanceof FileMatch ? obj.resource() : void 0);
 
 		this.tree = this._register(this.instantiationService.createInstance(WorkbenchTree, this.resultsElement, {
@@ -663,8 +661,8 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 		}
 	}
 
-	public setVisible(visible: boolean): TPromise<void> {
-		let promise: TPromise<void>;
+	public setVisible(visible: boolean): Promise<void> {
+		let promise: Promise<void>;
 		this.viewletVisible.set(visible);
 		if (visible) {
 			if (this.changedWhileHidden) {
@@ -1285,7 +1283,7 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 		};
 
 		// Handle UI updates in an interval to show frequent progress and results
-		let uiRefreshHandle = setInterval(() => {
+		let uiRefreshHandle: any = setInterval(() => {
 			if (!this.searching) {
 				window.clearInterval(uiRefreshHandle);
 				return;
@@ -1404,7 +1402,8 @@ export class SearchView extends Viewlet implements IViewlet, IPanel {
 			return TPromise.as(true);
 		}
 
-		return (this.viewModel.isReplaceActive() && !!this.viewModel.replaceString) ?
+		const useReplacePreview = this.configurationService.getValue<ISearchConfiguration>().search.useReplacePreview;
+		return (useReplacePreview && this.viewModel.isReplaceActive() && !!this.viewModel.replaceString) ?
 			this.replaceService.openReplacePreview(lineMatch, preserveFocus, sideBySide, pinned) :
 			this.open(lineMatch, preserveFocus, sideBySide, pinned);
 	}

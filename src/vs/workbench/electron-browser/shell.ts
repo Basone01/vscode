@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./media/shell';
 
 import * as platform from 'vs/base/common/platform';
@@ -94,11 +92,10 @@ import { EventType, addDisposableListener, addClass } from 'vs/base/browser/dom'
 import { IOpenerService } from 'vs/platform/opener/common/opener';
 import { OpenerService } from 'vs/editor/browser/services/openerService';
 import { SearchHistoryService } from 'vs/workbench/services/search/node/searchHistoryService';
-import { MulitExtensionManagementService } from 'vs/platform/extensionManagement/node/multiExtensionManagement';
 import { ExtensionManagementServerService } from 'vs/workbench/services/extensions/node/extensionManagementServerService';
 import { DefaultURITransformer } from 'vs/base/common/uriIpc';
 import { ExtensionGalleryService } from 'vs/platform/extensionManagement/node/extensionGalleryService';
-import { ILabelService } from 'vs/platform/label/common/label';
+import { ILabelService, LabelService } from 'vs/platform/label/common/label';
 import { IDownloadService } from 'vs/platform/download/common/download';
 import { DownloadService } from 'vs/platform/download/node/downloadService';
 import { runWhenIdle } from 'vs/base/common/async';
@@ -121,12 +118,10 @@ export interface ICoreServices {
 export class WorkbenchShell extends Disposable {
 	private storageService: IStorageService;
 	private environmentService: IEnvironmentService;
-	private labelService: ILabelService;
 	private logService: ILogService;
 	private configurationService: IConfigurationService;
 	private contextService: IWorkspaceContextService;
 	private telemetryService: ITelemetryService;
-	private extensionService: ExtensionService;
 	private broadcastService: IBroadcastService;
 	private themeService: WorkbenchThemeService;
 	private lifecycleService: LifecycleService;
@@ -165,6 +160,10 @@ export class WorkbenchShell extends Disposable {
 
 		// Instantiation service with services
 		const [instantiationService, serviceCollection] = this.initServiceCollection(this.container);
+
+		// Warm up font cache information before building up too many dom elements
+		restoreFontInfo(this.storageService);
+		readFontInfo(BareFontInfo.createFromRawSettings(this.configurationService.getValue('editor'), browser.getZoomLevel()));
 
 		// Workbench
 		this.workbench = this.createWorkbench(instantiationService, serviceCollection, this.container);
@@ -325,7 +324,7 @@ export class WorkbenchShell extends Disposable {
 		serviceCollection.set(IWorkspaceContextService, this.contextService);
 		serviceCollection.set(IConfigurationService, this.configurationService);
 		serviceCollection.set(IEnvironmentService, this.environmentService);
-		serviceCollection.set(ILabelService, this.labelService);
+		serviceCollection.set(ILabelService, new SyncDescriptor(LabelService));
 		serviceCollection.set(ILogService, this._register(this.logService));
 
 		serviceCollection.set(IStorageService, this.storageService);
@@ -349,10 +348,6 @@ export class WorkbenchShell extends Disposable {
 		sharedProcess.then(client => {
 			client.registerChannel('dialog', instantiationService.createInstance(DialogChannel));
 		});
-
-		// Warm up font cache information before building up too many dom elements
-		restoreFontInfo(this.storageService);
-		readFontInfo(BareFontInfo.createFromRawSettings(this.configurationService.getValue('editor'), browser.getZoomLevel()));
 
 		// Hash
 		serviceCollection.set(IHashService, new SyncDescriptor(HashService));
@@ -396,17 +391,12 @@ export class WorkbenchShell extends Disposable {
 		const extensionManagementChannel = getDelayedChannel<IExtensionManagementChannel>(sharedProcess.then(c => c.getChannel('extensions')));
 		const extensionManagementChannelClient = new ExtensionManagementChannelClient(extensionManagementChannel, DefaultURITransformer);
 		serviceCollection.set(IExtensionManagementServerService, new SyncDescriptor(ExtensionManagementServerService, extensionManagementChannelClient));
-		serviceCollection.set(IExtensionManagementService, new SyncDescriptor(MulitExtensionManagementService));
+		serviceCollection.set(IExtensionManagementService, extensionManagementChannelClient);
 
 		const extensionEnablementService = this._register(instantiationService.createInstance(ExtensionEnablementService));
 		serviceCollection.set(IExtensionEnablementService, extensionEnablementService);
 
-
-		this.extensionService = instantiationService.createInstance(ExtensionService);
-		serviceCollection.set(IExtensionService, this.extensionService);
-
-		perf.mark('willLoadExtensions');
-		this.extensionService.whenInstalledExtensionsRegistered().then(() => perf.mark('didLoadExtensions'));
+		serviceCollection.set(IExtensionService, instantiationService.createInstance(ExtensionService));
 
 		this.themeService = instantiationService.createInstance(WorkbenchThemeService, document.body);
 		serviceCollection.set(IWorkbenchThemeService, this.themeService);

@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import * as paths from 'vs/base/common/paths';
 import { Schemas } from 'vs/base/common/network';
@@ -405,11 +404,15 @@ export class ExtHostDebugService implements ExtHostDebugServiceShape {
 						mythis._debugServiceProxy.$acceptDAMessage(handle, message);
 					});
 					da.onError(err => {
-						tracker.debugAdapterError(err);
+						if (tracker) {
+							tracker.debugAdapterError(err);
+						}
 						this._debugServiceProxy.$acceptDAError(handle, err.name, err.message, err.stack);
 					});
 					da.onExit(code => {
-						tracker.debugAdapterExit(code, null);
+						if (tracker) {
+							tracker.debugAdapterExit(code, null);
+						}
 						this._debugServiceProxy.$acceptDAExit(handle, code, null);
 					});
 

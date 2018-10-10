@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./media/diffEditor';
 import * as nls from 'vs/nls';
 import { RunOnceScheduler } from 'vs/base/common/async';
@@ -2067,7 +2065,7 @@ registerThemingParticipant((theme, collector) => {
 		collector.addRule(`.monaco-diff-editor.side-by-side .editor.modified { box-shadow: -6px 0 5px -5px ${shadow}; }`);
 	}
 
-	let border = theme.getColor(diffBorder);
+	const border = theme.getColor(diffBorder);
 	if (border) {
 		collector.addRule(`.monaco-diff-editor.side-by-side .editor.modified { border-left: 1px solid ${border}; }`);
 	}

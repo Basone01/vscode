@@ -3,9 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
-import { TPromise } from 'vs/base/common/winjs.base';
 import { IMarkdownString } from 'vs/base/common/htmlContent';
 import { renderMarkdown, RenderOptions } from 'vs/base/browser/htmlContentRenderer';
 import { IOpenerService, NullOpenerService } from 'vs/platform/opener/common/opener';
@@ -37,7 +34,7 @@ export class MarkdownRenderer {
 
 	private getOptions(disposeables: IDisposable[]): RenderOptions {
 		return {
-			codeBlockRenderer: (languageAlias, value): TPromise<string> => {
+			codeBlockRenderer: (languageAlias, value) => {
 				// In markdown,
 				// it is possible that we stumble upon language aliases (e.g.js instead of javascript)
 				// it is possible no alias is given in which case we fall back to the current editor lang
@@ -58,7 +55,15 @@ export class MarkdownRenderer {
 			codeBlockRenderCallback: () => this._onDidRenderCodeBlock.fire(),
 			actionHandler: {
 				callback: (content) => {
-					this._openerService.open(URI.parse(content)).then(void 0, onUnexpectedError);
+					let uri: URI;
+					try {
+						uri = URI.parse(content);
+					} catch (err) {
+						// ignore
+					}
+					if (uri) {
+						this._openerService.open(uri).catch(onUnexpectedError);
+					}
 				},
 				disposeables
 			}

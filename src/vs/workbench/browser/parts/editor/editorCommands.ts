@@ -12,7 +12,6 @@ import { IEditorService } from 'vs/workbench/services/editor/common/editorServic
 import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { TextDiffEditor } from 'vs/workbench/browser/parts/editor/textDiffEditor';
 import { KeyMod, KeyCode, KeyChord } from 'vs/base/common/keyCodes';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { URI } from 'vs/base/common/uri';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
 import { IListService } from 'vs/platform/list/browser/listService';
@@ -475,7 +474,7 @@ function registerCloseEditorCommands() {
 				contexts.push({ groupId: activeGroup.id }); // active group as fallback
 			}
 
-			return TPromise.join(distinct(contexts.map(c => c.groupId)).map(groupId =>
+			return Promise.all(distinct(contexts.map(c => c.groupId)).map(groupId =>
 				editorGroupService.getGroup(groupId).closeEditors({ savedOnly: true })
 			));
 		}
@@ -495,7 +494,7 @@ function registerCloseEditorCommands() {
 				distinctGroupIds.push(editorGroupService.activeGroup.id);
 			}
 
-			return TPromise.join(distinctGroupIds.map(groupId =>
+			return Promise.all(distinctGroupIds.map(groupId =>
 				editorGroupService.getGroup(groupId).closeAllEditors()
 			));
 		}
@@ -518,7 +517,7 @@ function registerCloseEditorCommands() {
 
 			const groupIds = distinct(contexts.map(context => context.groupId));
 
-			return TPromise.join(groupIds.map(groupId => {
+			return Promise.all(groupIds.map(groupId => {
 				const group = editorGroupService.getGroup(groupId);
 				const editors = contexts
 					.filter(context => context.groupId === groupId)
@@ -567,7 +566,7 @@ function registerCloseEditorCommands() {
 
 			const groupIds = distinct(contexts.map(context => context.groupId));
 
-			return TPromise.join(groupIds.map(groupId => {
+			return Promise.all(groupIds.map(groupId => {
 				const group = editorGroupService.getGroup(groupId);
 				const editors = contexts
 					.filter(context => context.groupId === groupId)
@@ -592,7 +591,7 @@ function registerCloseEditorCommands() {
 				return group.closeEditors({ direction: CloseDirection.RIGHT, except: editor });
 			}
 
-			return TPromise.as(false);
+			return Promise.resolve(false);
 		}
 	});
 
@@ -609,7 +608,7 @@ function registerCloseEditorCommands() {
 				return group.pinEditor(editor);
 			}
 
-			return TPromise.as(false);
+			return Promise.resolve(false);
 		}
 	});
 

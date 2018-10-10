@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import 'vs/css!./standalone-tokens';
 import * as editorCommon from 'vs/editor/common/editorCommon';
@@ -241,14 +240,14 @@ export function createWebWorker<T>(opts: IWebWorkerOptions): MonacoWebWorker<T> 
 /**
  * Colorize the contents of `domNode` using attribute `data-lang`.
  */
-export function colorizeElement(domNode: HTMLElement, options: IColorizerElementOptions): TPromise<void> {
+export function colorizeElement(domNode: HTMLElement, options: IColorizerElementOptions): Promise<void> {
 	return Colorizer.colorizeElement(StaticServices.standaloneThemeService.get(), StaticServices.modeService.get(), domNode, options);
 }
 
 /**
  * Colorize `text` using language `languageId`.
  */
-export function colorize(text: string, languageId: string, options: IColorizerOptions): TPromise<string> {
+export function colorize(text: string, languageId: string, options: IColorizerOptions): Promise<string> {
 	return Colorizer.colorize(StaticServices.modeService.get(), text, languageId, options);
 }
 

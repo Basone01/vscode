@@ -2,10 +2,8 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
-
 import * as assert from 'assert';
-import { ITextSearchPreviewOptions, OneLineRange, TextSearchResult } from 'vs/platform/search/common/search';
+import { ITextSearchPreviewOptions, OneLineRange, TextSearchResult, SearchRange } from 'vs/platform/search/common/search';
 
 suite('TextSearchResult', () => {
 
@@ -80,4 +78,28 @@ suite('TextSearchResult', () => {
 		assert.deepEqual(result.range, range);
 		assertPreviewRangeText('b', result);
 	});
+
+	test('one line of multiline match', () => {
+		const previewOptions: ITextSearchPreviewOptions = {
+			matchLines: 1,
+			charsPerLine: 10000
+		};
+
+		const range = new SearchRange(5, 4, 6, 3);
+		const result = new TextSearchResult('foo bar\nfoo bar', range, previewOptions);
+		assert.deepEqual(result.range, range);
+		assertPreviewRangeText('bar', result);
+	});
+
+	// test('all lines of multiline match', () => {
+	// 	const previewOptions: ITextSearchPreviewOptions = {
+	// 		matchLines: 5,
+	// 		charsPerLine: 10000
+	// 	};
+
+	// 	const range = new SearchRange(5, 4, 6, 3);
+	// 	const result = new TextSearchResult('foo bar\nfoo bar', range, previewOptions);
+	// 	assert.deepEqual(result.range, range);
+	// 	assertPreviewRangeText('bar\nfoo', result);
+	// });
 });

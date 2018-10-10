@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import { illegalState } from 'vs/base/common/errors';
 import { create } from 'vs/base/common/types';
@@ -18,9 +17,9 @@ export class InstantiationService implements IInstantiationService {
 
 	_serviceBrand: any;
 
-	private readonly _services: ServiceCollection;
-	private readonly _strict: boolean;
-	private readonly _parent: InstantiationService;
+	protected readonly _services: ServiceCollection;
+	protected readonly _strict: boolean;
+	protected readonly _parent: InstantiationService;
 
 	constructor(services: ServiceCollection = new ServiceCollection(), strict: boolean = false, parent?: InstantiationService) {
 		this._services = services;
@@ -187,13 +186,21 @@ export class InstantiationService implements IInstantiationService {
 
 			for (let { data } of roots) {
 				// create instance and overwrite the service collections
-				const instance = this._createServiceInstance(data.desc.ctor, data.desc.staticArguments, data._trace);
+				const instance = this._createServiceInstanceWithOwner(data.id, data.desc.ctor, data.desc.staticArguments, data._trace);
 				this._setServiceInstance(data.id, instance);
 				graph.removeNode(data);
 			}
 		}
 
 		return <T>this._getServiceInstanceOrDescriptor(id);
+	}
+
+	private _createServiceInstanceWithOwner<T>(id: ServiceIdentifier<T>, ctor: any, args: any[] = [], _trace: Trace): T {
+		if (this._services.get(id) instanceof SyncDescriptor) {
+			return this._createServiceInstance(ctor, args, _trace);
+		} else {
+			return this._parent._createServiceInstanceWithOwner(id, ctor, args, _trace);
+		}
 	}
 
 	protected _createServiceInstance<T>(ctor: any, args: any[] = [], _trace: Trace): T {

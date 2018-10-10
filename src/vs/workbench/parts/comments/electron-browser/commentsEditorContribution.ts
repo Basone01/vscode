@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import 'vs/css!./media/review';
 import * as nls from 'vs/nls';
@@ -593,7 +592,7 @@ function closeReviewPanel(accessor: ServicesAccessor, args: any) {
 
 
 registerThemingParticipant((theme, collector) => {
-	let peekViewBackground = theme.getColor(peekViewResultsBackground);
+	const peekViewBackground = theme.getColor(peekViewResultsBackground);
 	if (peekViewBackground) {
 		collector.addRule(
 			`.monaco-editor .review-widget,` +
@@ -602,7 +601,7 @@ registerThemingParticipant((theme, collector) => {
 			`}`);
 	}
 
-	let monacoEditorBackground = theme.getColor(peekViewTitleBackground);
+	const monacoEditorBackground = theme.getColor(peekViewTitleBackground);
 	if (monacoEditorBackground) {
 		collector.addRule(
 			`.monaco-editor .review-widget .body .comment-form .review-thread-reply-button {` +
@@ -611,7 +610,7 @@ registerThemingParticipant((theme, collector) => {
 		);
 	}
 
-	let monacoEditorForeground = theme.getColor(editorForeground);
+	const monacoEditorForeground = theme.getColor(editorForeground);
 	if (monacoEditorForeground) {
 		collector.addRule(
 			`.monaco-editor .review-widget .body .monaco-editor {` +
@@ -623,7 +622,7 @@ registerThemingParticipant((theme, collector) => {
 		);
 	}
 
-	let selectionBackground = theme.getColor(peekViewResultsSelectionBackground);
+	const selectionBackground = theme.getColor(peekViewResultsSelectionBackground);
 
 	if (selectionBackground) {
 		collector.addRule(
