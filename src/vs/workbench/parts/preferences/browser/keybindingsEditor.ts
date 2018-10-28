@@ -31,7 +31,7 @@ import {
 import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
 import { IKeybindingEditingService } from 'vs/workbench/services/keybinding/common/keybindingEditing';
 import { List } from 'vs/base/browser/ui/list/listWidget';
-import { IVirtualDelegate, IRenderer, IListContextMenuEvent, IListEvent } from 'vs/base/browser/ui/list/list';
+import { IListVirtualDelegate, IListRenderer, IListContextMenuEvent, IListEvent } from 'vs/base/browser/ui/list/list';
 import { IThemeService, registerThemingParticipant, ITheme, ICssStyleCollector } from 'vs/platform/theme/common/themeService';
 import { IContextKeyService, IContextKey } from 'vs/platform/contextkey/common/contextkey';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
@@ -44,6 +44,8 @@ import { INotificationService } from 'vs/platform/notification/common/notificati
 import { KeybindingsEditorInput } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
 import { CancellationToken } from 'vs/base/common/cancellation';
 import { attachStylerCallback } from 'vs/platform/theme/common/styler';
+import { IStorageService } from 'vs/platform/storage/common/storage';
+import { IPreferencesService } from 'vs/workbench/services/preferences/common/preferences';
 
 let $ = DOM.$;
 
@@ -89,9 +91,11 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 		@INotificationService private notificationService: INotificationService,
 		@IClipboardService private clipboardService: IClipboardService,
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@IEditorService private editorService: IEditorService
+		@IEditorService private editorService: IEditorService,
+		@IStorageService storageService: IStorageService,
+		@IPreferencesService private preferencesService: IPreferencesService
 	) {
-		super(KeybindingsEditor.ID, telemetryService, themeService);
+		super(KeybindingsEditor.ID, telemetryService, themeService, storageService);
 		this.delayedFiltering = new Delayer<void>(300);
 		this._register(keybindingsService.onDidUpdateKeybindings(() => this.render(false, CancellationToken.None)));
 
@@ -287,7 +291,8 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 			placeholder: fullTextSearchPlaceholder,
 			focusKey: this.searchFocusContextKey,
 			ariaLabelledBy: 'keybindings-editor-aria-label-element',
-			recordEnter: true
+			recordEnter: true,
+			quoteRecordedKeys: true
 		}));
 		this._register(this.searchWidget.onDidChange(searchValue => {
 			clearInputAction.enabled = !!searchValue;
@@ -343,6 +348,8 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 		}));
 
 		this.actionBar.push([this.recordKeysAction, this.sortByPrecedenceAction, clearInputAction], { label: false, icon: true });
+
+		this.createOpenKeybindingsElement(this.headerContainer);
 	}
 
 	private createRecordingBadge(container: HTMLElement): HTMLElement {
@@ -360,6 +367,24 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 			recordingBadge.style.color = color ? color.toString() : null;
 		}));
 		return recordingBadge;
+	}
+
+	private createOpenKeybindingsElement(parent: HTMLElement): void {
+		const openKeybindingsContainer = DOM.append(parent, $('.open-keybindings-container'));
+		DOM.append(openKeybindingsContainer, $('', null, localize('header-message', "For advanced customizations open and edit")));
+		const fileElement = DOM.append(openKeybindingsContainer, $('.file-name', null, localize('keybindings-file-name', "keybindings.json")));
+		fileElement.tabIndex = 0;
+		this._register(DOM.addDisposableListener(fileElement, DOM.EventType.CLICK, () => this.preferencesService.openGlobalKeybindingSettings(true)));
+		this._register(DOM.addDisposableListener(fileElement, DOM.EventType.KEY_UP, e => {
+			let keyboardEvent = new StandardKeyboardEvent(e);
+			switch (keyboardEvent.keyCode) {
+				case KeyCode.Enter:
+					this.preferencesService.openGlobalKeybindingSettings(true);
+					keyboardEvent.preventDefault();
+					keyboardEvent.stopPropagation();
+					return;
+			}
+		}));
 	}
 
 	private layoutSearchWidget(dimension: DOM.Dimension): void {
@@ -653,7 +678,7 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 	}
 }
 
-class Delegate implements IVirtualDelegate<IListEntry> {
+class Delegate implements IListVirtualDelegate<IListEntry> {
 
 	getHeight(element: IListEntry) {
 		if (element.templateId === KEYBINDING_ENTRY_TEMPLATE_ID) {
@@ -686,7 +711,7 @@ interface KeybindingItemTemplate {
 	when: WhenColumn;
 }
 
-class KeybindingHeaderRenderer implements IRenderer<IListEntry, any> {
+class KeybindingHeaderRenderer implements IListRenderer<IListEntry, any> {
 
 	get templateId(): string { return KEYBINDING_HEADER_TEMPLATE_ID; }
 
@@ -713,7 +738,7 @@ class KeybindingHeaderRenderer implements IRenderer<IListEntry, any> {
 	}
 }
 
-class KeybindingItemRenderer implements IRenderer<IKeybindingItemEntry, KeybindingItemTemplate> {
+class KeybindingItemRenderer implements IListRenderer<IKeybindingItemEntry, KeybindingItemTemplate> {
 
 	get templateId(): string { return KEYBINDING_ENTRY_TEMPLATE_ID; }
 
@@ -784,7 +809,7 @@ class ActionsColumn extends Column {
 
 	render(keybindingItemEntry: IKeybindingItemEntry): void {
 		this.actionBar.clear();
-		const actions = [];
+		const actions: IAction[] = [];
 		if (keybindingItemEntry.keybindingItem.keybinding) {
 			actions.push(this.createEditAction(keybindingItemEntry));
 		} else {

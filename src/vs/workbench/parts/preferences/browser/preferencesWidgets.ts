@@ -172,6 +172,11 @@ export class SettingsGroupTitleWidget extends Widget implements IViewZone {
 	}
 
 	public render() {
+		if (!this.settingsGroup.range) {
+			// #61352
+			return;
+		}
+
 		this._afterLineNumber = this.settingsGroup.range.startLineNumber - 2;
 		this.editor.changeViewZones(accessor => {
 			this.id = accessor.addZone(this);
@@ -257,6 +262,10 @@ export class SettingsGroupTitleWidget extends Widget implements IViewZone {
 			return false;
 		}
 		if (previousPosition.lineNumber === currentPosition.lineNumber) {
+			return false;
+		}
+		if (!this.settingsGroup.range) {
+			// #60460?
 			return false;
 		}
 		if (currentPosition.lineNumber === this.settingsGroup.range.startLineNumber - 1 || currentPosition.lineNumber === this.settingsGroup.range.startLineNumber - 2) {

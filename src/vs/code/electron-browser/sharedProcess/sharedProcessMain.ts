@@ -62,8 +62,14 @@ const eventPrefix = 'monacoworkbench';
 
 function main(server: Server, initData: ISharedProcessInitData, configuration: ISharedProcessConfiguration): void {
 	const services = new ServiceCollection();
+
 	const disposables: IDisposable[] = [];
-	process.once('exit', () => dispose(disposables));
+
+	const onExit = () => dispose(disposables);
+	process.once('exit', onExit);
+	ipcRenderer.once('handshake:goodbye', onExit);
+
+	disposables.push(server);
 
 	const environmentService = new EnvironmentService(initData.args, process.execPath);
 	const mainRoute = () => TPromise.as('main');
@@ -99,7 +105,7 @@ function main(server: Server, initData: ISharedProcessInitData, configuration: I
 		telemetryLogService.info('The below are logs for every telemetry event sent from VS Code once the log level is set to trace.');
 		telemetryLogService.info('===========================================================');
 
-		let appInsightsAppender: ITelemetryAppender = NullAppender;
+		let appInsightsAppender: ITelemetryAppender | null = NullAppender;
 		if (product.aiConfig && product.aiConfig.asimovKey && isBuilt) {
 			appInsightsAppender = new AppInsightsAppender(eventPrefix, null, product.aiConfig.asimovKey, telemetryLogService);
 			disposables.push(appInsightsAppender); // Ensure the AI appender is disposed so that it flushes remaining data

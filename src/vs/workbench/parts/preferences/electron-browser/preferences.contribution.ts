@@ -206,7 +206,7 @@ registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalSettingsActi
 
 registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalKeybindingsAction, OpenGlobalKeybindingsAction.ID, OpenGlobalKeybindingsAction.LABEL, { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyCode.KEY_S) }), 'Preferences: Open Keyboard Shortcuts', category);
 registry.registerWorkbenchAction(new SyncActionDescriptor(OpenDefaultKeybindingsFileAction, OpenDefaultKeybindingsFileAction.ID, OpenDefaultKeybindingsFileAction.LABEL), 'Preferences: Open Default Keyboard Shortcuts File', category);
-registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalKeybindingsFileAction, OpenGlobalKeybindingsFileAction.ID, OpenGlobalKeybindingsFileAction.LABEL, { primary: null }), 'Preferences: Open Keyboard Shortcuts File', category);
+registry.registerWorkbenchAction(new SyncActionDescriptor(OpenGlobalKeybindingsFileAction, OpenGlobalKeybindingsFileAction.ID, OpenGlobalKeybindingsFileAction.LABEL, { primary: 0 }), 'Preferences: Open Keyboard Shortcuts File', category);
 registry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureLanguageBasedSettingsAction, ConfigureLanguageBasedSettingsAction.ID, ConfigureLanguageBasedSettingsAction.LABEL), 'Preferences: Configure Language Specific Settings...', category);
 
 KeybindingsRegistry.registerCommandAndKeybindingRule({
@@ -242,7 +242,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: KEYBINDINGS_EDITOR_COMMAND_RESET,
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDING_FOCUS),
-	primary: null,
+	primary: 0,
 	handler: (accessor, args: any) => {
 		const control = accessor.get(IEditorService).activeControl as IKeybindingsEditor;
 		if (control && control instanceof KeybindingsEditor) {
@@ -296,7 +296,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: KEYBINDINGS_EDITOR_COMMAND_SHOW_SIMILAR,
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDING_FOCUS),
-	primary: null,
+	primary: 0,
 	handler: (accessor, args: any) => {
 		const control = accessor.get(IEditorService).activeControl as IKeybindingsEditor;
 		if (control) {
@@ -322,7 +322,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: KEYBINDINGS_EDITOR_COMMAND_COPY_COMMAND,
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDING_FOCUS),
-	primary: null,
+	primary: 0,
 	handler: (accessor, args: any) => {
 		const control = accessor.get(IEditorService).activeControl as IKeybindingsEditor;
 		if (control) {
@@ -384,22 +384,6 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 			control.clearSearchResults();
 		}
 	}
-});
-
-CommandsRegistry.registerCommand(OpenGlobalKeybindingsFileAction.ID, serviceAccessor => {
-	serviceAccessor.get(IInstantiationService).createInstance(OpenGlobalKeybindingsFileAction, OpenGlobalKeybindingsFileAction.ID, OpenGlobalKeybindingsFileAction.LABEL).run();
-});
-MenuRegistry.appendMenuItem(MenuId.EditorTitle, {
-	command: {
-		id: OpenGlobalKeybindingsFileAction.ID,
-		title: OpenGlobalKeybindingsFileAction.LABEL,
-		iconLocation: {
-			light: URI.parse(require.toUrl(`vs/workbench/parts/preferences/browser/media/open-file.svg`)),
-			dark: URI.parse(require.toUrl(`vs/workbench/parts/preferences/browser/media/open-file-inverse.svg`))
-		}
-	},
-	when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR),
-	group: 'navigation',
 });
 
 CommandsRegistry.registerCommand(KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS, serviceAccessor => {

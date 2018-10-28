@@ -131,7 +131,7 @@ abstract class AbstractFileOutputChannel extends Disposable implements OutputCha
 		if (this.model) {
 			this.model.setValue(content);
 		} else {
-			this.model = this.modelService.createModel(content, this.modeService.getOrCreateMode(this.mimeType), this.modelUri);
+			this.model = this.modelService.createModel(content, this.modeService.create(this.mimeType), this.modelUri);
 			this.onModelCreated(this.model);
 			const disposables: IDisposable[] = [];
 			disposables.push(this.model.onWillDispose(() => {
@@ -461,8 +461,8 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		}
 		this._register(registry.onDidRegisterChannel(this.onDidRegisterChannel, this));
 
-		panelService.onDidPanelOpen(this.onDidPanelOpen, this);
-		panelService.onDidPanelClose(this.onDidPanelClose, this);
+		this._register(panelService.onDidPanelOpen(({ panel, focus }) => this.onDidPanelOpen(panel, !focus), this));
+		this._register(panelService.onDidPanelClose(this.onDidPanelClose, this));
 
 		// Set active channel to first channel if not set
 		if (!this.activeChannel) {
@@ -470,7 +470,8 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 			this.activeChannel = channels && channels.length > 0 ? this.getChannel(channels[0].id) : null;
 		}
 
-		this.lifecycleService.onShutdown(() => this.onShutdown());
+		this._register(this.lifecycleService.onShutdown(() => this.dispose()));
+		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 	}
 
 	provideTextContent(resource: URI): TPromise<ITextModel> {
@@ -493,10 +494,10 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		this.activeChannel = channel;
 		let promise: TPromise<void> = TPromise.as(null);
 		if (this.isPanelShown()) {
-			this.doShowChannel(channel, preserveFocus);
+			promise = this.doShowChannel(channel, preserveFocus);
 		} else {
-			promise = this.panelService.openPanel(OUTPUT_PANEL_ID)
-				.then(() => this.doShowChannel(this.activeChannel, preserveFocus));
+			this.panelService.openPanel(OUTPUT_PANEL_ID);
+			promise = this.doShowChannel(this.activeChannel, preserveFocus);
 		}
 		return promise.then(() => this._onActiveOutputChannel.fire(id));
 	}
@@ -518,16 +519,16 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		this.channels.set(channelId, channel);
 		if (this.activeChannelIdInStorage === channelId) {
 			this.activeChannel = channel;
-			this.onDidPanelOpen(this.panelService.getActivePanel())
+			this.onDidPanelOpen(this.panelService.getActivePanel(), true)
 				.then(() => this._onActiveOutputChannel.fire(channelId));
 		}
 	}
 
-	private onDidPanelOpen(panel: IPanel): Thenable<void> {
+	private onDidPanelOpen(panel: IPanel, preserveFocus: boolean): Thenable<void> {
 		if (panel && panel.getId() === OUTPUT_PANEL_ID) {
 			this._outputPanel = <OutputPanel>this.panelService.getActivePanel();
 			if (this.activeChannel) {
-				return this.doShowChannel(this.activeChannel, true);
+				return this.doShowChannel(this.activeChannel, preserveFocus);
 			}
 		}
 		return TPromise.as(null);
@@ -633,11 +634,10 @@ export class OutputService extends Disposable implements IOutputService, ITextMo
 		return this.instantiationService.createInstance(ResourceEditorInput, nls.localize('output', "{0} - Output", channel.label), nls.localize('channel', "Output channel for '{0}'", channel.label), resource);
 	}
 
-	onShutdown(): void {
+	private saveState(): void {
 		if (this.activeChannel) {
 			this.storageService.store(OUTPUT_ACTIVE_CHANNEL_KEY, this.activeChannel.id, StorageScope.WORKSPACE);
 		}
-		this.dispose();
 	}
 }
 
@@ -681,7 +681,7 @@ class BufferredOutputChannel extends Disposable implements OutputChannel {
 
 	readonly id: string;
 	readonly label: string;
-	readonly file: URI = null;
+	readonly file: URI | null = null;
 	scrollLock: boolean = false;
 
 	protected _onDidAppendedContent: Emitter<void> = new Emitter<void>();
@@ -744,7 +744,7 @@ class BufferredOutputChannel extends Disposable implements OutputChannel {
 	}
 
 	private createModel(content: string): ITextModel {
-		const model = this.modelService.createModel(content, this.modeService.getOrCreateMode(OUTPUT_MIME), URI.from({ scheme: OUTPUT_SCHEME, path: this.id }));
+		const model = this.modelService.createModel(content, this.modeService.create(OUTPUT_MIME), URI.from({ scheme: OUTPUT_SCHEME, path: this.id }));
 		const disposables: IDisposable[] = [];
 		disposables.push(model.onWillDispose(() => {
 			this.model = null;

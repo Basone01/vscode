@@ -101,9 +101,9 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		@IThemeService protected themeService: IThemeService,
 		@IModelService private modelService: IModelService,
 		@IContextKeyService private contextKeyService: IContextKeyService,
-		@ICodeEditorService codeEditorService: ICodeEditorService,
+		@ICodeEditorService codeEditorService: ICodeEditorService
 	) {
-		super(REPL_ID, telemetryService, themeService);
+		super(REPL_ID, telemetryService, themeService, storageService);
 
 		this.replInputHeight = Repl.REPL_INPUT_INITIAL_HEIGHT;
 		this.history = new HistoryNavigator(JSON.parse(this.storageService.get(HISTORY_STORAGE_KEY, StorageScope.WORKSPACE, '[]')), 50);
@@ -125,7 +125,7 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		}));
 	}
 
-	setVisible(visible: boolean): Promise<void> {
+	setVisible(visible: boolean): void {
 		if (!visible) {
 			dispose(this.model);
 		} else {
@@ -138,7 +138,7 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 			}
 		}
 
-		return super.setVisible(visible);
+		super.setVisible(visible);
 	}
 
 	get isReadonly(): boolean {
@@ -257,15 +257,6 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		return result;
 	}
 
-	shutdown(): void {
-		const replHistory = this.history.getHistory();
-		if (replHistory.length) {
-			this.storageService.store(HISTORY_STORAGE_KEY, JSON.stringify(replHistory), StorageScope.WORKSPACE);
-		} else {
-			this.storageService.remove(HISTORY_STORAGE_KEY, StorageScope.WORKSPACE);
-		}
-	}
-
 	// --- Cached locals
 	@memoize
 	private get characterWidth(): number {
@@ -291,8 +282,8 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 
 	// --- Creation
 
-	async create(parent: HTMLElement): Promise<void> {
-		await super.create(parent);
+	create(parent: HTMLElement): void {
+		super.create(parent);
 		this.container = dom.append(parent, $('.repl'));
 		this.treeContainer = dom.append(this.container, $('.repl-tree'));
 		this.createReplInput(this.container);
@@ -358,6 +349,9 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		this._register(this.replInput.onDidChangeModelContent(() => {
 			this.historyNavigationEnablement.set(this.replInput.getModel().getValue() === '');
 		}));
+		// We add the input decoration only when the focus is in the input #61126
+		this._register(this.replInput.onDidFocusEditorText(() => this.updateInputDecoration()));
+		this._register(this.replInput.onDidBlurEditorText(() => this.updateInputDecoration()));
 
 		this._register(dom.addStandardDisposableListener(this.replInputContainer, dom.EventType.FOCUS, () => dom.addClass(this.replInputContainer, 'synthetic-focus')));
 		this._register(dom.addStandardDisposableListener(this.replInputContainer, dom.EventType.BLUR, () => dom.removeClass(this.replInputContainer, 'synthetic-focus')));
@@ -391,7 +385,7 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		}
 
 		const decorations: IDecorationOptions[] = [];
-		if (this.isReadonly) {
+		if (this.isReadonly && this.replInput.hasTextFocus()) {
 			decorations.push({
 				range: {
 					startLineNumber: 0,
@@ -409,6 +403,17 @@ export class Repl extends Panel implements IPrivateReplService, IHistoryNavigati
 		}
 
 		this.replInput.setDecorations(DECORATION_KEY, decorations);
+	}
+
+	protected saveState(): void {
+		const replHistory = this.history.getHistory();
+		if (replHistory.length) {
+			this.storageService.store(HISTORY_STORAGE_KEY, JSON.stringify(replHistory), StorageScope.WORKSPACE);
+		} else {
+			this.storageService.remove(HISTORY_STORAGE_KEY, StorageScope.WORKSPACE);
+		}
+
+		super.saveState();
 	}
 
 	dispose(): void {

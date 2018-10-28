@@ -271,7 +271,7 @@ export class Variable extends ExpressionContainer implements IExpression {
 		namedVariables: number,
 		indexedVariables: number,
 		public presentationHint: DebugProtocol.VariablePresentationHint,
-		public type: string = null,
+		public type: string | null = null,
 		public available = true,
 		startOfVariables = 0
 	) {
@@ -280,7 +280,7 @@ export class Variable extends ExpressionContainer implements IExpression {
 	}
 
 	public setVariable(value: string): TPromise<any> {
-		return this.session.setVariable((<ExpressionContainer>this.parent).reference, name, value).then(response => {
+		return this.session.setVariable((<ExpressionContainer>this.parent).reference, this.name, value).then(response => {
 			if (response && response.body) {
 				this.value = response.body.value;
 				this.type = response.body.type || this.type;
@@ -759,7 +759,8 @@ export class DebugModel implements IDebugModel {
 
 	public addSession(session: IDebugSession): void {
 		// Make sure to remove all inactive sessions once a new session is started
-		this.sessions = this.sessions.filter(s => s.state !== State.Inactive);
+		// Also make sure to de-dupe if a session is re-intialized. In case of EH debugging we are adding a session again after an attach.
+		this.sessions = this.sessions.filter(s => s.state !== State.Inactive && s.getId() !== session.getId());
 		this.sessions.push(session);
 		this._onDidChangeCallStack.fire();
 	}
@@ -784,7 +785,7 @@ export class DebugModel implements IDebugModel {
 		}
 	}
 
-	public clearThreads(id: string, removeThreads: boolean, reference: number = undefined): void {
+	public clearThreads(id: string, removeThreads: boolean, reference: number | undefined = undefined): void {
 		const session = this.sessions.filter(p => p.getId() === id).pop();
 		this.schedulers.forEach(scheduler => scheduler.dispose());
 		this.schedulers.clear();
@@ -1025,7 +1026,7 @@ export class DebugModel implements IDebugModel {
 		}
 	}
 
-	public removeWatchExpressions(id: string = null): void {
+	public removeWatchExpressions(id: string | null = null): void {
 		this.watchExpressions = id ? this.watchExpressions.filter(we => we.getId() !== id) : [];
 		this._onDidChangeWatchExpressions.fire();
 	}

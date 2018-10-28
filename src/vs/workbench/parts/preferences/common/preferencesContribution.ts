@@ -128,10 +128,10 @@ export class PreferencesContribution implements IWorkbenchContribution {
 		let schema = schemaRegistry.getSchemaContributions().schemas[uri.toString()];
 		if (schema) {
 			const modelContent = JSON.stringify(schema);
-			const mode = this.modeService.getOrCreateMode('jsonc');
-			const model = this.modelService.createModel(modelContent, mode, uri);
+			const languageSelection = this.modeService.create('jsonc');
+			const model = this.modelService.createModel(modelContent, languageSelection, uri);
 
-			let disposables = [];
+			let disposables: IDisposable[] = [];
 			disposables.push(schemaRegistry.onDidChangeSchema(schemaUri => {
 				if (schemaUri === uri.toString()) {
 					schema = schemaRegistry.getSchemaContributions().schemas[uri.toString()];

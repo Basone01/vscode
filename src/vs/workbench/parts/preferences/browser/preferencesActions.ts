@@ -14,7 +14,7 @@ import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IQuickInputService, IQuickPickItem } from 'vs/platform/quickinput/common/quickInput';
 import { IWorkspaceContextService, IWorkspaceFolder, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from 'vs/workbench/browser/actions/workspaceCommands';
-import { getIconClasses } from 'vs/workbench/browser/labels';
+import { getIconClasses } from 'vs/editor/common/services/getIconClasses';
 import { IPreferencesService } from 'vs/workbench/services/preferences/common/preferences';
 
 export class OpenRawDefaultSettingsAction extends Action {
@@ -278,8 +278,8 @@ export class ConfigureLanguageBasedSettingsAction extends Action {
 		return this.quickInputService.pick(picks, { placeHolder: nls.localize('pickLanguage', "Select Language") })
 			.then(pick => {
 				if (pick) {
-					return this.modeService.getOrCreateModeByLanguageName(pick.label)
-						.then(mode => this.preferencesService.configureSettingsForLanguage(mode.getLanguageIdentifier().language));
+					const modeId = this.modeService.getModeIdForLanguageName(pick.label.toLowerCase());
+					return this.preferencesService.configureSettingsForLanguage(modeId);
 				}
 				return undefined;
 			});
