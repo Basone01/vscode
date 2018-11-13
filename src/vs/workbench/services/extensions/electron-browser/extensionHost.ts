@@ -94,7 +94,7 @@ export class ExtensionHostProcessWorker implements IExtensionHostStarter {
 	private _messageProtocol: TPromise<IMessagePassingProtocol>;
 
 	constructor(
-		private readonly _extensions: TPromise<IExtensionDescription[]>,
+		private readonly _extensions: Promise<IExtensionDescription[]>,
 		private readonly _extensionHostLogsLocation: URI,
 		@IWorkspaceContextService private readonly _contextService: IWorkspaceContextService,
 		@INotificationService private readonly _notificationService: INotificationService,
@@ -263,7 +263,7 @@ export class ExtensionHostProcessWorker implements IExtensionHostStarter {
 
 				// Help in case we fail to start it
 				let startupTimeoutHandle: any;
-				if (!this._environmentService.isBuilt || this._isExtensionDevHost) {
+				if (!this._environmentService.isBuilt && !this._windowService.getConfiguration().remoteAuthority || this._isExtensionDevHost) {
 					startupTimeoutHandle = setTimeout(() => {
 						const msg = this._isExtensionDevDebugBrk
 							? nls.localize('extensionHostProcess.startupFailDebug', "Extension host did not start in 10 seconds, it might be stopped on the first line and needs a debugger to continue.")
@@ -314,8 +314,6 @@ export class ExtensionHostProcessWorker implements IExtensionHostStarter {
 		let startPort = 9333;
 		if (typeof this._environmentService.debugExtensionHost.port === 'number') {
 			startPort = expected = this._environmentService.debugExtensionHost.port;
-		} else {
-			return Promise.resolve({ expected: undefined, actual: 0 });
 		}
 		return new Promise(resolve => {
 			return findFreePort(startPort, 10 /* try 10 ports */, 5000 /* try up to 5 seconds */).then(port => {
@@ -362,22 +360,38 @@ export class ExtensionHostProcessWorker implements IExtensionHostStarter {
 			// 2) wait for the incoming `initialized` event.
 			return new Promise<IMessagePassingProtocol>((resolve, reject) => {
 
-				let handle = setTimeout(() => {
-					reject('timeout');
-				}, 60 * 1000);
+				let timeoutHandle: NodeJS.Timer;
+				const installTimeoutCheck = () => {
+					timeoutHandle = setTimeout(() => {
+						reject('timeout');
+					}, 60 * 1000);
+				};
+				const uninstallTimeoutCheck = () => {
+					clearTimeout(timeoutHandle);
+				};
+
+				// Wait 60s for the ready message
+				installTimeoutCheck();
 
 				const disposable = protocol.onMessage(msg => {
 
 					if (isMessageOfType(msg, MessageType.Ready)) {
 						// 1) Extension Host is ready to receive messages, initialize it
-						this._createExtHostInitData().then(data => protocol.send(Buffer.from(JSON.stringify(data))));
+						uninstallTimeoutCheck();
+
+						this._createExtHostInitData().then(data => {
+
+							// Wait 60s for the initialized message
+							installTimeoutCheck();
+
+							protocol.send(Buffer.from(JSON.stringify(data)));
+						});
 						return;
 					}
 
 					if (isMessageOfType(msg, MessageType.Initialized)) {
 						// 2) Extension Host is initialized
-
-						clearTimeout(handle);
+						uninstallTimeoutCheck();
 
 						// stop listening for messages here
 						disposable.dispose();

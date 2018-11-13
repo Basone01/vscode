@@ -20,6 +20,41 @@ declare module 'vscode' {
 		export function sampleFunction(): Thenable<any>;
 	}
 
+	//#region Joh
+
+	/**
+	 *
+	 */
+	export type Declaration = Location | Location[] | DefinitionLink[];
+
+	/**
+	 * The declaration provider interface defines the contract between extensions and
+	 * the go to declaration feature.
+	 */
+	export interface DeclarationProvider {
+
+		/**
+		 * Provide the declaration of the symbol at the given position and document.
+		 *
+		 * @param document The document in which the command was invoked.
+		 * @param position The position at which the command was invoked.
+		 * @param token A cancellation token.
+		 * @return A declaration or a thenable that resolves to such. The lack of a result can be
+		 * signaled by returning `undefined` or `null`.
+		 */
+		provideDeclaration(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Declaration>;
+	}
+
+	export namespace languages {
+		/**
+		 *
+		 * @param selector
+		 * @param provider
+		 */
+		export function registerDeclarationProvider(selector: DocumentSelector, provider: DeclarationProvider): Disposable;
+	}
+	//#endregion
+
 	//#region Joh - https://github.com/Microsoft/vscode/issues/57093
 
 	/**
@@ -43,19 +78,6 @@ declare module 'vscode' {
 		 * editor. Can be a bit mask of many rules.
 		 */
 		insertTextRules?: CompletionItemInsertTextRule;
-	}
-
-	//#endregion
-
-	//#region Joh - clipboard https://github.com/Microsoft/vscode/issues/217
-
-	export interface Clipboard {
-		readText(): Thenable<string>;
-		writeText(value: string): Thenable<void>;
-	}
-
-	export namespace env {
-		export const clipboard: Clipboard;
 	}
 
 	//#endregion
@@ -233,7 +255,7 @@ declare module 'vscode' {
 		/**
 		 * The maximum number of results to be returned.
 		 */
-		maxResults: number;
+		maxResults?: number;
 	}
 
 	/**
@@ -549,8 +571,6 @@ declare module 'vscode' {
 	 */
 	export class DebugAdapterExecutable {
 
-		readonly type: 'executable';
-
 		/**
 		 * The command path of the debug adapter executable.
 		 * A command must be either an absolute path or the name of an executable looked up via the PATH environment variable.
@@ -586,8 +606,6 @@ declare module 'vscode' {
 	 */
 	export class DebugAdapterServer {
 
-		readonly type: 'server';
-
 		/**
 		 * The port.
 		 */
@@ -608,8 +626,6 @@ declare module 'vscode' {
 	 * Represents a debug adapter that is implemented in the extension.
 	 */
 	export class DebugAdapterImplementation {
-
-		readonly type: 'implementation';
 
 		readonly implementation: any;
 
@@ -639,7 +655,24 @@ declare module 'vscode' {
 
 	export interface DebugConfigurationProvider {
 		/**
-		 * The optional method 'provideDebugAdapter' is called at the start of a debug session to provide details about the debug adapter to use.
+		 * Deprecated, use DebugConfigurationProvider.provideDebugAdapter instead.
+		 * @deprecated Use DebugConfigurationProvider.provideDebugAdapter instead
+		 */
+		debugAdapterExecutable?(folder: WorkspaceFolder | undefined, token?: CancellationToken): ProviderResult<DebugAdapterExecutable>;
+
+		/**
+		 * The optional method 'provideDebugAdapterTracker' is called at the start of a debug session to provide a tracker that gives access to the communication between VS Code and a Debug Adapter.
+		 * @param session The [debug session](#DebugSession) for which the tracker will be used.
+		 * @param folder The workspace folder from which the configuration originates from or undefined for a folderless setup.
+		 * @param config The resolved debug configuration.
+		 * @param token A cancellation token.
+		 */
+		provideDebugAdapterTracker?(session: DebugSession, folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterTracker>;
+	}
+
+	export interface DebugAdapterProvider {
+		/**
+		 * Method 'provideDebugAdapter' is called at the start of a debug session to provide details about the debug adapter to use.
 		 * These details must be returned as objects of type DebugAdapterDescriptor.
 		 * Currently two types of debug adapters are supported:
 		 * - a debug adapter executable specified as a command path and arguments (see DebugAdapterExecutable),
@@ -651,8 +684,6 @@ declare module 'vscode' {
 		 *      }
 		 * 		return executable;
 		 *   }
-		 * An extension is only allowed to register a DebugConfigurationProvider with a provideDebugAdapter method if the extension defines the debug type. Otherwise an error is thrown.
-		 * Registering more than one DebugConfigurationProvider with a provideDebugAdapter method for a type results in an error.
 		 * @param session The [debug session](#DebugSession) for which the debug adapter will be used.
 		 * @param folder The workspace folder from which the configuration originates from or undefined for a folderless setup.
 		 * @param executable The debug adapter's executable information as specified in the package.json (or undefined if no such information exists).
@@ -660,22 +691,21 @@ declare module 'vscode' {
 		 * @param token A cancellation token.
 		 * @return a [debug adapter's descriptor](#DebugAdapterDescriptor) or undefined.
 		 */
-		provideDebugAdapter?(session: DebugSession, folder: WorkspaceFolder | undefined, executable: DebugAdapterExecutable | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterDescriptor>;
+		provideDebugAdapter(session: DebugSession, folder: WorkspaceFolder | undefined, executable: DebugAdapterExecutable | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterDescriptor>;
+	}
 
+	export namespace debug {
 		/**
-		 * The optional method 'provideDebugAdapterTracker' is called at the start of a debug session to provide a tracker that gives access to the communication between VS Code and a Debug Adapter.
-		 * @param session The [debug session](#DebugSession) for which the tracker will be used.
-		 * @param folder The workspace folder from which the configuration originates from or undefined for a folderless setup.
-		 * @param config The resolved debug configuration.
-		 * @param token A cancellation token.
+		 * Register a [debug adapter provider](#DebugConfigurationProvider) for a specific debug type.
+		 * Only one provider can be registered for the same type.
+		 * An extension is only allowed to register a DebugAdapterProvider with if the extension defines the debug type. Otherwise an error is thrown.
+		 * Registering more than one DebugAdapterProvider for a type results in an error.
+		 *
+		 * @param type The debug type for which the provider is registered.
+		 * @param provider The [debug adapter provider](#DebugAdapterProvider) to register.
+		 * @return A [disposable](#Disposable) that unregisters this provider when being disposed.
 		 */
-		provideDebugAdapterTracker?(session: DebugSession, folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterTracker>;
-
-		/**
-		 * Deprecated, use DebugConfigurationProvider.provideDebugAdapter instead.
-		 * @deprecated Use DebugConfigurationProvider.provideDebugAdapter instead
-		 */
-		debugAdapterExecutable?(folder: WorkspaceFolder | undefined, token?: CancellationToken): ProviderResult<DebugAdapterExecutable>;
+		export function registerDebugAdapterProvider(debugType: string, provider: DebugAdapterProvider): Disposable;
 	}
 
 	//#endregion
@@ -784,8 +814,8 @@ declare module 'vscode' {
 	export interface SourceControlInputBox {
 
 		/**
-		* Whether the input box is visible.
-		*/
+			* Controls whether the input box is visible (default is `true`).
+			*/
 		visible: boolean;
 	}
 

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { Client as TelemetryClient } from 'vs/base/parts/ipc/node/ipc.cp';
 import * as strings from 'vs/base/common/strings';
 import * as objects from 'vs/base/common/objects';
@@ -18,6 +17,7 @@ import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IOutputService } from 'vs/workbench/parts/output/common/output';
 import { ExecutableDebugAdapter, SocketDebugAdapter } from 'vs/workbench/parts/debug/node/debugAdapter';
 import { IConfigurationResolverService } from 'vs/workbench/services/configurationResolver/common/configurationResolver';
+import * as ConfigurationResolverUtils from 'vs/workbench/services/configurationResolver/common/configurationResolverUtils';
 import { TelemetryService } from 'vs/platform/telemetry/common/telemetryService';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { memoize } from 'vs/base/common/decorators';
@@ -41,18 +41,20 @@ export class Debugger implements IDebugger {
 		this.mergedExtensionDescriptions = [extensionDescription];
 	}
 
-	public hasConfigurationProvider = false;
 
-	public createDebugAdapter(session: IDebugSession, root: IWorkspaceFolder, config: IConfig, outputService: IOutputService): TPromise<IDebugAdapter> {
+	createDebugAdapter(session: IDebugSession, root: IWorkspaceFolder, config: IConfig, outputService: IOutputService): Promise<IDebugAdapter> {
 		if (this.inExtHost()) {
 			return Promise.resolve(this.configurationManager.createDebugAdapter(session, root, config));
 		} else {
 			return this.getAdapterDescriptor(session, root, config).then(adapterDescriptor => {
 				switch (adapterDescriptor.type) {
-					case 'server':
-						return new SocketDebugAdapter(adapterDescriptor);
 					case 'executable':
 						return new ExecutableDebugAdapter(adapterDescriptor, this.type, outputService);
+					case 'server':
+						return new SocketDebugAdapter(adapterDescriptor);
+					case 'implementation':
+						// TODO@AW: this.inExtHost() should now return true
+						return Promise.resolve(this.configurationManager.createDebugAdapter(session, root, config));
 					default:
 						throw new Error('Cannot create debug adapter.');
 				}
@@ -60,7 +62,7 @@ export class Debugger implements IDebugger {
 		}
 	}
 
-	private getAdapterDescriptor(session: IDebugSession, root: IWorkspaceFolder, config: IConfig): TPromise<IAdapterDescriptor> {
+	private getAdapterDescriptor(session: IDebugSession, root: IWorkspaceFolder, config: IConfig): Promise<IAdapterDescriptor> {
 
 		// a "debugServer" attribute in the launch config takes precedence
 		if (typeof config.debugServer === 'number') {
@@ -94,7 +96,7 @@ export class Debugger implements IDebugger {
 		});
 	}
 
-	public substituteVariables(folder: IWorkspaceFolder, config: IConfig): TPromise<IConfig> {
+	substituteVariables(folder: IWorkspaceFolder, config: IConfig): Thenable<IConfig> {
 		if (this.inExtHost()) {
 			return this.configurationManager.substituteVariables(this.type, folder, config).then(config => {
 				return this.configurationResolverService.resolveWithCommands(folder, config, this.variables);
@@ -104,7 +106,7 @@ export class Debugger implements IDebugger {
 		}
 	}
 
-	public runInTerminal(args: DebugProtocol.RunInTerminalRequestArguments): TPromise<void> {
+	runInTerminal(args: DebugProtocol.RunInTerminalRequestArguments): Promise<void> {
 		const config = this.configurationService.getValue<ITerminalSettings>('terminal');
 		return this.configurationManager.runInTerminal(this.inExtHost() ? this.type : '*', args, config);
 	}
@@ -114,27 +116,27 @@ export class Debugger implements IDebugger {
 		return debugConfigs.extensionHostDebugAdapter || this.configurationManager.needsToRunInExtHost(this.type) || this.extensionDescription.extensionLocation.scheme !== 'file';
 	}
 
-	public get label(): string {
+	get label(): string {
 		return this.debuggerContribution.label || this.debuggerContribution.type;
 	}
 
-	public get type(): string {
+	get type(): string {
 		return this.debuggerContribution.type;
 	}
 
-	public get variables(): { [key: string]: string } {
+	get variables(): { [key: string]: string } {
 		return this.debuggerContribution.variables;
 	}
 
-	public get configurationSnippets(): IJSONSchemaSnippet[] {
+	get configurationSnippets(): IJSONSchemaSnippet[] {
 		return this.debuggerContribution.configurationSnippets;
 	}
 
-	public get languages(): string[] {
+	get languages(): string[] {
 		return this.debuggerContribution.languages;
 	}
 
-	public merge(secondRawAdapter: IDebuggerContribution, extensionDescription: IExtensionDescription): void {
+	merge(secondRawAdapter: IDebuggerContribution, extensionDescription: IExtensionDescription): void {
 
 		// remember all ext descriptions that are the source of this debugger
 		this.mergedExtensionDescriptions.push(extensionDescription);
@@ -146,11 +148,15 @@ export class Debugger implements IDebugger {
 		objects.mixin(this.debuggerContribution, secondRawAdapter, extensionDescription.isBuiltin);
 	}
 
-	public hasInitialConfiguration(): boolean {
+	hasInitialConfiguration(): boolean {
 		return !!this.debuggerContribution.initialConfigurations;
 	}
 
-	public getInitialConfigurationContent(initialConfigs?: IConfig[]): TPromise<string> {
+	hasConfigurationProvider(): boolean {
+		return this.configurationManager.hasDebugConfigurationProvider(this.type);
+	}
+
+	getInitialConfigurationContent(initialConfigs?: IConfig[]): Promise<string> {
 		// at this point we got some configs from the package.json and/or from registered DebugConfigurationProviders
 		let initialConfigurations = this.debuggerContribution.initialConfigurations || [];
 		if (initialConfigs) {
@@ -183,7 +189,7 @@ export class Debugger implements IDebugger {
 	}
 
 	@memoize
-	public getCustomTelemetryService(): TPromise<TelemetryService> {
+	getCustomTelemetryService(): Thenable<TelemetryService> {
 		if (!this.debuggerContribution.aiKey) {
 			return Promise.resolve(undefined);
 		}
@@ -215,7 +221,7 @@ export class Debugger implements IDebugger {
 		});
 	}
 
-	public getSchemaAttributes(): IJSONSchema[] {
+	getSchemaAttributes(): IJSONSchema[] {
 		if (!this.debuggerContribution.configurationAttributes) {
 			return null;
 		}
@@ -286,9 +292,7 @@ export class Debugger implements IDebugger {
 			};
 			Object.keys(attributes.properties).forEach(name => {
 				// Use schema allOf property to get independent error reporting #21113
-				attributes.properties[name].pattern = attributes.properties[name].pattern || '^(?!.*\\$\\{(env|config|command)\\.)';
-				attributes.properties[name].patternErrorMessage = attributes.properties[name].patternErrorMessage ||
-					nls.localize('deprecatedVariables', "'env.', 'config.' and 'command.' are deprecated, use 'env:', 'config:' and 'command:' instead.");
+				ConfigurationResolverUtils.applyDeprecatedVariableMessage(attributes.properties[name]);
 			});
 
 			return attributes;
