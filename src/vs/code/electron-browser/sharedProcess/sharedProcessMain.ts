@@ -8,7 +8,6 @@ import * as platform from 'vs/base/common/platform';
 import product from 'vs/platform/node/product';
 import pkg from 'vs/platform/node/package';
 import { serve, Server, connect } from 'vs/base/parts/ipc/node/ipc.net';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
 import { InstantiationService } from 'vs/platform/instantiation/common/instantiationService';
@@ -47,6 +46,7 @@ import { RemoteAuthorityResolverService } from 'vs/platform/remote/node/remoteAu
 import { IRemoteAuthorityResolverService } from 'vs/platform/remote/common/remoteAuthorityResolver';
 import { RemoteAuthorityResolverChannel } from 'vs/platform/remote/node/remoteAuthorityResolverChannel';
 import { StaticRouter } from 'vs/base/parts/ipc/node/ipc';
+import { DefaultURITransformer } from 'vs/base/common/uriIpc';
 
 export interface ISharedProcessConfiguration {
 	readonly machineId: string;
@@ -141,7 +141,7 @@ function main(server: Server, initData: ISharedProcessInitData, configuration: I
 			server.registerChannel('remoteAuthorityResolver', remoteAuthorityResolverChannel);
 
 			const extensionManagementService = accessor.get(IExtensionManagementService);
-			const channel = new ExtensionManagementChannel(extensionManagementService);
+			const channel = new ExtensionManagementChannel(extensionManagementService, () => DefaultURITransformer);
 			server.registerChannel('extensions', channel);
 
 			// clean up deprecated extensions
@@ -192,15 +192,14 @@ function setupIPC(hook: string): Thenable<Server> {
 	return setup(true);
 }
 
-function startHandshake(): TPromise<ISharedProcessInitData> {
-	return new TPromise<ISharedProcessInitData>((c, e) => {
+async function handshake(configuration: ISharedProcessConfiguration): Promise<void> {
+	const data = await new Promise<ISharedProcessInitData>(c => {
 		ipcRenderer.once('handshake:hey there', (_: any, r: ISharedProcessInitData) => c(r));
 		ipcRenderer.send('handshake:hello');
 	});
-}
 
-function handshake(configuration: ISharedProcessConfiguration): TPromise<void> {
-	return startHandshake()
-		.then(data => setupIPC(data.sharedIPCHandle).then(server => main(server, data, configuration)))
-		.then(() => ipcRenderer.send('handshake:im ready'));
+	const server = await setupIPC(data.sharedIPCHandle);
+
+	main(server, data, configuration);
+	ipcRenderer.send('handshake:im ready');
 }

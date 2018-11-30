@@ -6,7 +6,6 @@
 import { URI } from 'vs/base/common/uri';
 import * as path from 'path';
 import * as fs from 'fs';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { IChannel, IServerChannel } from 'vs/base/parts/ipc/node/ipc';
 import { Event, Emitter, buffer } from 'vs/base/common/event';
 import { IDownloadService } from 'vs/platform/download/common/download';
@@ -36,7 +35,7 @@ export class DownloadServiceChannel implements IServerChannel {
 		throw new Error(`Event not found: ${event}`);
 	}
 
-	call(_, command: string): TPromise<any> {
+	call(_, command: string): Thenable<any> {
 		throw new Error(`Call not found: ${command}`);
 	}
 }
@@ -45,10 +44,10 @@ export class DownloadServiceChannelClient implements IDownloadService {
 
 	_serviceBrand: any;
 
-	constructor(private channel: IChannel, private uriTransformer: IURITransformer) { }
+	constructor(private channel: IChannel, private getUriTransformer: () => IURITransformer) { }
 
 	download(from: URI, to: string): Promise<void> {
-		from = this.uriTransformer.transformOutgoing(from);
+		from = this.getUriTransformer().transformOutgoing(from);
 		const dirName = path.dirname(to);
 		let out: fs.WriteStream;
 		return new Promise((c, e) => {
