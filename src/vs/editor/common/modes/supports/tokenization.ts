@@ -402,7 +402,7 @@ export function generateTokensCSSForColorMap(colorMap: Color[]): string {
 		// HACK WARNING:
 		// Rainbow text.
 		if (String(color) === '#fefeff') {
-			rules[i] += `.mtk${i} {
+			rules[i] += `.mtk${i}:not(.cursor) {
 				background: linear-gradient(-45deg,
 						hsl(0, 95%, 80%), hsl(60, 95%, 80%), hsl(120, 95%, 80%), hsl(180, 95%, 80%),
 						hsl(240, 95%, 80%), hsl(300, 95%, 80%), hsl(360, 95%, 80%));
