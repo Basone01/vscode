@@ -30,12 +30,16 @@ I had to fork VS Code to implement some features that would not be possible usin
     },
 	```
 
+- **Rotating Cursor** — The cursor rotates when moving up and down. This requires the `editor.cursorSmoothCaretAnimation` setting to be turned on.
+
 ## Demo
 
 ![Demo](https://i.imgur.com/wxV0gAu.gif)
 
 - Chords: `fun`&rarr;`function$1 () {}`, `con`&rarr;`console.log($1)`, `ret`&rarr;`return`, `fal`&rarr;`false`
 - Rainbow strings (`'Hello'`)
+
+![Rotating cursor](https://i.imgur.com/qLHzA09.gif)
 
 ## Building
 
