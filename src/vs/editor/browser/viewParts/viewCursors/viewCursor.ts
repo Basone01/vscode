@@ -45,6 +45,8 @@ export class ViewCursor {
 	private _isVisible: boolean;
 
 	private _position: Position;
+	private _previousLineNumber: number = 1;
+	private _flips: number = 0;
 
 	private _lastRenderedContent: string;
 	private _renderData: ViewCursorRenderData | null;
@@ -196,11 +198,25 @@ export class ViewCursor {
 		this._domNode.setClassName('cursor ' + this._renderData.textContentClassName);
 
 		this._domNode.setDisplay('block');
+		/*
+		// Disabled because changing these properties causes a relayout,
+		// which does not play well with `editor.cursorSmoothCaretAnimation`.
 		this._domNode.setTop(this._renderData.top);
 		this._domNode.setLeft(this._renderData.left);
+		*/
 		this._domNode.setWidth(this._renderData.width);
 		this._domNode.setLineHeight(this._renderData.height);
 		this._domNode.setHeight(this._renderData.height);
+
+		// THE CURSOR ROTATES AS IT TRAVELS TO DIFFERENT LINES!!
+		const lineNumber = this._position.lineNumber;
+		if (lineNumber > this._previousLineNumber) {
+			this._flips += 1;
+		} else if (lineNumber < this._previousLineNumber) {
+			this._flips -= 1;
+		}
+		this._previousLineNumber = lineNumber;
+		this._domNode.domNode.style.transform = `translate(${this._renderData.left}px,${this._renderData.top}px) rotate(${this._flips * 180}deg)`;
 
 		return {
 			domNode: this._domNode.domNode,

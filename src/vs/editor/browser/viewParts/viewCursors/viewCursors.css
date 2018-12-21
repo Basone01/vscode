@@ -15,7 +15,7 @@
 
 /* -- smooth-caret-animation -- */
 .monaco-editor .cursors-layer.cursor-smooth-caret-animation > .cursor {
-	transition: 80ms;
+	transition: 240ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* -- block-outline-style -- */
