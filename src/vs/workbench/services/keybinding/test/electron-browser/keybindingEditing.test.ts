@@ -39,7 +39,7 @@ import { IWorkspaceContextService, Workspace, toWorkspaceFolders } from 'vs/plat
 import { IBackupFileService } from 'vs/workbench/services/backup/common/backup';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { FileService } from 'vs/workbench/services/files/electron-browser/fileService';
-import { IEditorGroupsService } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { IHashService } from 'vs/workbench/services/hash/common/hashService';
 import { KeybindingsEditingService } from 'vs/workbench/services/keybinding/common/keybindingEditing';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
@@ -111,11 +111,11 @@ suite('KeybindingsEditing', () => {
 	teardown(() => {
 		return new Promise<void>((c, e) => {
 			if (testDir) {
-				extfs.del(testDir, os.tmpdir(), () => c(null), () => c(null));
+				extfs.del(testDir, os.tmpdir(), () => c(undefined), () => c(undefined));
 			} else {
-				c(null);
+				c(undefined);
 			}
-		}).then(() => testDir = null);
+		}).then(() => testDir = null!);
 	});
 
 	test('errors cases - parse errors', () => {
@@ -247,10 +247,10 @@ suite('KeybindingsEditing', () => {
 	function aResolvedKeybindingItem({ command, when, isDefault, firstPart, chordPart }: { command?: string, when?: string, isDefault?: boolean, firstPart?: { keyCode: KeyCode, modifiers?: Modifiers }, chordPart?: { keyCode: KeyCode, modifiers?: Modifiers } }): ResolvedKeybindingItem {
 		const aSimpleKeybinding = function (part: { keyCode: KeyCode, modifiers?: Modifiers }): SimpleKeybinding {
 			const { ctrlKey, shiftKey, altKey, metaKey } = part.modifiers || { ctrlKey: false, shiftKey: false, altKey: false, metaKey: false };
-			return new SimpleKeybinding(ctrlKey, shiftKey, altKey, metaKey, part.keyCode);
+			return new SimpleKeybinding(ctrlKey!, shiftKey!, altKey!, metaKey!, part.keyCode);
 		};
 		const keybinding = firstPart ? chordPart ? new ChordKeybinding(aSimpleKeybinding(firstPart), aSimpleKeybinding(chordPart)) : aSimpleKeybinding(firstPart) : null;
-		return new ResolvedKeybindingItem(keybinding ? new USLayoutResolvedKeybinding(keybinding, OS) : null, command || 'some command', null, when ? ContextKeyExpr.deserialize(when) : null, isDefault === void 0 ? true : isDefault);
+		return new ResolvedKeybindingItem(keybinding ? new USLayoutResolvedKeybinding(keybinding, OS) : null, command || 'some command', null, when ? ContextKeyExpr.deserialize(when) : null, isDefault === undefined ? true : isDefault);
 	}
 
 });

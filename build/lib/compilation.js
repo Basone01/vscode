@@ -16,7 +16,8 @@ const monacodts = require("../monaco/api");
 const nls = require("./nls");
 const reporter_1 = require("./reporter");
 const util = require("./util");
-const util2 = require("gulp-util");
+const fancyLog = require("fancy-log");
+const ansiColors = require("ansi-colors");
 const watch = require('./watch');
 const reporter = reporter_1.createReporter();
 function getTypeScriptCompilerOptions(src) {
@@ -77,7 +78,7 @@ const typesDts = [
     '!node_modules/@types/uglify-js/**/*',
 ];
 function compileTask(src, out, build) {
-    return function () {
+    const result = function () {
         const compile = createCompile(src, build, true);
         const srcPipe = es.merge(gulp.src(`${src}/**`, { base: `${src}` }), gulp.src(typesDts));
         let generator = new MonacoGenerator(false);
@@ -89,10 +90,12 @@ function compileTask(src, out, build) {
             .pipe(compile())
             .pipe(gulp.dest(out));
     };
+    result.displayName = `compile-task-${out}${build ? '-build' : ''}`;
+    return result;
 }
 exports.compileTask = compileTask;
 function watchTask(out, build) {
-    return function () {
+    const result = function () {
         const compile = createCompile('src', build);
         const src = es.merge(gulp.src('src/**', { base: 'src' }), gulp.src(typesDts));
         const watchSrc = watch('src/**', { base: 'src' });
@@ -103,6 +106,8 @@ function watchTask(out, build) {
             .pipe(util.incremental(compile, src, true))
             .pipe(gulp.dest(out));
     };
+    result.displayName = `watch-task-${out}${build ? '-build' : ''}`;
+    return result;
 }
 exports.watchTask = watchTask;
 const REPO_SRC_FOLDER = path.join(__dirname, '../../src');
@@ -123,6 +128,20 @@ class MonacoGenerator {
             this._watchedFiles[filePath] = true;
             const watcher = fs.watch(filePath);
             watcher.addListener('change', () => {
+                this._declarationResolver.invalidateCache(moduleId);
+                this._executeSoon();
+            });
+            watcher.addListener('error', (err) => {
+                console.error(`Encountered error while watching ${filePath}.`);
+                console.log(err);
+                delete this._watchedFiles[filePath];
+                for (let i = 0; i < this._watchers.length; i++) {
+                    if (this._watchers[i] === watcher) {
+                        this._watchers.splice(i, 1);
+                        break;
+                    }
+                }
+                watcher.close();
                 this._declarationResolver.invalidateCache(moduleId);
                 this._executeSoon();
             });
@@ -165,7 +184,7 @@ class MonacoGenerator {
         return r;
     }
     _log(message, ...rest) {
-        util2.log(util2.colors.cyan('[monaco.d.ts]'), message, ...rest);
+        fancyLog(ansiColors.cyan('[monaco.d.ts]'), message, ...rest);
     }
     execute() {
         const startTime = Date.now();

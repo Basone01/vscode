@@ -24,12 +24,12 @@
           ".jshintrc",
           ".jscsrc",
           ".eslintrc",
-          ".babelrc",
           ".webmanifest",
           ".js.map",
           ".css.map"
         ],
         "filenames": [
+          "composer.lock",
           ".watchmanconfig",
           ".ember-cli"
         ],
@@ -45,6 +45,8 @@
           "JSON with Comments"
         ],
         "extensions": [
+          ".hintrc",
+          ".babelrc",
           ".jsonc"
         ],
         "configuration": "./language-configuration.json"

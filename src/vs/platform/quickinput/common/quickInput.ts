@@ -114,7 +114,7 @@ export interface IInputOptions {
 	/**
 	 * an optional function that is used to validate user input.
 	 */
-	validateInput?: (input: string) => Thenable<string>;
+	validateInput?: (input: string) => Promise<string>;
 }
 
 export interface IQuickInput {
@@ -150,7 +150,7 @@ export interface IQuickPick<T extends IQuickPickItem> extends IQuickInput {
 
 	readonly onDidChangeValue: Event<string>;
 
-	readonly onDidAccept: Event<string>;
+	readonly onDidAccept: Event<void>;
 
 	buttons: ReadonlyArray<IQuickInputButton>;
 
@@ -183,7 +183,7 @@ export interface IInputBox extends IQuickInput {
 
 	value: string;
 
-	valueSelection: Readonly<[number, number]>;
+	valueSelection: Readonly<[number, number]> | undefined;
 
 	placeholder: string | undefined;
 
@@ -191,7 +191,7 @@ export interface IInputBox extends IQuickInput {
 
 	readonly onDidChangeValue: Event<string>;
 
-	readonly onDidAccept: Event<string>;
+	readonly onDidAccept: Event<void>;
 
 	buttons: ReadonlyArray<IQuickInputButton>;
 
@@ -203,7 +203,9 @@ export interface IInputBox extends IQuickInput {
 }
 
 export interface IQuickInputButton {
+	/** iconPath or iconClass required */
 	iconPath?: { dark: URI; light?: URI; };
+	/** iconPath or iconClass required */
 	iconClass?: string;
 	tooltip?: string;
 }
@@ -230,9 +232,9 @@ export interface IQuickInputService {
 	/**
 	 * Opens the quick input box for selecting items and returns a promise with the user selected item(s) if any.
 	 */
-	pick<T extends IQuickPickItem>(picks: Thenable<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: IPickOptions<T> & { canPickMany: true }, token?: CancellationToken): Promise<T[]>;
-	pick<T extends IQuickPickItem>(picks: Thenable<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: IPickOptions<T> & { canPickMany: false }, token?: CancellationToken): Promise<T>;
-	pick<T extends IQuickPickItem>(picks: Thenable<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: Omit<IPickOptions<T>, 'canPickMany'>, token?: CancellationToken): Promise<T>;
+	pick<T extends IQuickPickItem>(picks: Promise<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: IPickOptions<T> & { canPickMany: true }, token?: CancellationToken): Promise<T[]>;
+	pick<T extends IQuickPickItem>(picks: Promise<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: IPickOptions<T> & { canPickMany: false }, token?: CancellationToken): Promise<T>;
+	pick<T extends IQuickPickItem>(picks: Promise<QuickPickInput<T>[]> | QuickPickInput<T>[], options?: Omit<IPickOptions<T>, 'canPickMany'>, token?: CancellationToken): Promise<T>;
 
 	/**
 	 * Opens the quick input box for text input and returns a promise with the user typed value if any.

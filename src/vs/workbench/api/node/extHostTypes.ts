@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as crypto from 'crypto';
-
-import { URI } from 'vs/base/common/uri';
-import { illegalArgument } from 'vs/base/common/errors';
-import * as vscode from 'vscode';
-import { isMarkdownString } from 'vs/base/common/htmlContent';
-import { IRelativePattern } from 'vs/base/common/glob';
 import { relative } from 'path';
-import { startsWith } from 'vs/base/common/strings';
-import { values } from 'vs/base/common/map';
 import { coalesce, equals } from 'vs/base/common/arrays';
+import { illegalArgument } from 'vs/base/common/errors';
+import { IRelativePattern } from 'vs/base/common/glob';
+import { isMarkdownString } from 'vs/base/common/htmlContent';
+import { values } from 'vs/base/common/map';
+import { startsWith } from 'vs/base/common/strings';
+import { URI } from 'vs/base/common/uri';
 import { generateUuid } from 'vs/base/common/uuid';
+import * as vscode from 'vscode';
+
 
 export class Disposable {
 
@@ -32,9 +32,9 @@ export class Disposable {
 		});
 	}
 
-	private _callOnDispose?: Function;
+	private _callOnDispose?: () => any;
 
-	constructor(callOnDispose: Function) {
+	constructor(callOnDispose: () => any) {
 		this._callOnDispose = callOnDispose;
 	}
 
@@ -1000,7 +1000,7 @@ export class CodeAction {
 
 	edit?: WorkspaceEdit;
 
-	dianostics?: Diagnostic[];
+	diagnostics?: Diagnostic[];
 
 	kind?: CodeActionKind;
 
@@ -1022,6 +1022,7 @@ export class CodeActionKind {
 	public static readonly RefactorRewrite = CodeActionKind.Refactor.append('rewrite');
 	public static readonly Source = CodeActionKind.Empty.append('source');
 	public static readonly SourceOrganizeImports = CodeActionKind.Source.append('organizeImports');
+	public static readonly SourceFixAll = CodeActionKind.Source.append('fixAll');
 
 	constructor(
 		public readonly value: string
@@ -1031,8 +1032,42 @@ export class CodeActionKind {
 		return new CodeActionKind(this.value ? this.value + CodeActionKind.sep + parts : parts);
 	}
 
+	public intersects(other: CodeActionKind): boolean {
+		return this.contains(other) || other.contains(this);
+	}
+
 	public contains(other: CodeActionKind): boolean {
 		return this.value === other.value || startsWith(other.value, this.value + CodeActionKind.sep);
+	}
+}
+
+export class SelectionRangeKind {
+
+	private static readonly _sep = '.';
+
+	static readonly Empty = new SelectionRangeKind('');
+	static readonly Statement = SelectionRangeKind.Empty.append('statement');
+	static readonly Declaration = SelectionRangeKind.Empty.append('declaration');
+
+	readonly value: string;
+
+	constructor(value: string) {
+		this.value = value;
+	}
+
+	append(value: string): SelectionRangeKind {
+		return new SelectionRangeKind(this.value ? this.value + SelectionRangeKind._sep + value : value);
+	}
+}
+
+export class SelectionRange {
+
+	kind: SelectionRangeKind;
+	range: Range;
+
+	constructor(range: Range, kind: SelectionRangeKind, ) {
+		this.range = range;
+		this.kind = kind;
 	}
 }
 
@@ -1118,7 +1153,7 @@ export class SignatureHelp {
 	}
 }
 
-export enum SignatureHelpTriggerReason {
+export enum SignatureHelpTriggerKind {
 	Invoke = 1,
 	TriggerCharacter = 2,
 	ContentChange = 3,
@@ -1131,8 +1166,8 @@ export enum CompletionTriggerKind {
 }
 
 export interface CompletionContext {
-	triggerKind: CompletionTriggerKind;
-	triggerCharacter: string;
+	readonly triggerKind: CompletionTriggerKind;
+	readonly triggerCharacter?: string;
 }
 
 export enum CompletionItemKind {
@@ -1167,15 +1202,15 @@ export class CompletionItem implements vscode.CompletionItem {
 
 	label: string;
 	kind: CompletionItemKind | undefined;
-	detail: string;
-	documentation: string | MarkdownString;
-	sortText: string;
-	filterText: string;
-	preselect: boolean;
+	detail?: string;
+	documentation?: string | MarkdownString;
+	sortText?: string;
+	filterText?: string;
+	preselect?: boolean;
 	insertText: string | SnippetString;
 	keepWhitespace?: boolean;
 	range: Range;
-	commitCharacters: string[];
+	commitCharacters?: string[];
 	textEdit: TextEdit;
 	additionalTextEdits: TextEdit[];
 	command: vscode.Command;
@@ -1279,7 +1314,7 @@ export enum DecorationRangeBehavior {
 }
 
 export namespace TextEditorSelectionChangeKind {
-	export function fromValue(s: string) {
+	export function fromValue(s: string | undefined) {
 		switch (s) {
 			case 'keyboard': return TextEditorSelectionChangeKind.Keyboard;
 			case 'mouse': return TextEditorSelectionChangeKind.Mouse;
@@ -1436,7 +1471,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 			throw illegalArgument('process');
 		}
 		this._process = process;
-		if (varg1 !== void 0) {
+		if (varg1 !== undefined) {
 			if (Array.isArray(varg1)) {
 				this._args = varg1;
 				this._options = varg2;
@@ -1444,7 +1479,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 				this._options = varg1;
 			}
 		}
-		if (this._args === void 0) {
+		if (this._args === undefined) {
 			this._args = [];
 		}
 	}
@@ -1483,7 +1518,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 	public computeId(): string {
 		const hash = crypto.createHash('md5');
 		hash.update('process');
-		if (this._process !== void 0) {
+		if (this._process !== undefined) {
 			hash.update(this._process);
 		}
 		if (this._args && this._args.length > 0) {
@@ -1565,10 +1600,10 @@ export class ShellExecution implements vscode.ShellExecution {
 	public computeId(): string {
 		const hash = crypto.createHash('md5');
 		hash.update('shell');
-		if (this._commandLine !== void 0) {
+		if (this._commandLine !== undefined) {
 			hash.update(this._commandLine);
 		}
-		if (this._command !== void 0) {
+		if (this._command !== undefined) {
 			hash.update(typeof this._command === 'string' ? this._command : this._command.value);
 		}
 		if (this._args && this._args.length > 0) {
@@ -1591,12 +1626,7 @@ export enum TaskScope {
 	Workspace = 2
 }
 
-export enum RerunBehavior {
-	reevaluate = 1,
-	useEvaluated = 2,
-}
-
-export class Task implements vscode.Task2 {
+export class Task implements vscode.Task {
 
 	private static ProcessType: string = 'process';
 	private static ShellType: string = 'shell';
@@ -1663,7 +1693,7 @@ export class Task implements vscode.Task2 {
 	}
 
 	private clear(): void {
-		if (this.__id === void 0) {
+		if (this.__id === undefined) {
 			return;
 		}
 		this.__id = undefined;
@@ -1695,7 +1725,7 @@ export class Task implements vscode.Task2 {
 	}
 
 	set definition(value: vscode.TaskDefinition) {
-		if (value === void 0 || value === null) {
+		if (value === undefined || value === null) {
 			throw illegalArgument('Kind can\'t be undefined or null');
 		}
 		this.clear();

@@ -32,10 +32,10 @@ import { LifecycleService } from 'vs/platform/lifecycle/electron-browser/lifecyc
 import { MarkerService } from 'vs/platform/markers/common/markerService';
 import { IModelService } from 'vs/editor/common/services/modelService';
 import { ModelServiceImpl } from 'vs/editor/common/services/modelServiceImpl';
-import { CodeEditorService } from 'vs/workbench/services/codeEditor/browser/codeEditorService';
+import { CodeEditorService } from 'vs/workbench/services/editor/browser/codeEditorService';
 import { ICodeEditorService } from 'vs/editor/browser/services/codeEditorService';
-import { IntegrityServiceImpl } from 'vs/platform/integrity/node/integrityServiceImpl';
-import { IIntegrityService } from 'vs/platform/integrity/common/integrity';
+import { IntegrityServiceImpl } from 'vs/workbench/services/integrity/node/integrityServiceImpl';
+import { IIntegrityService } from 'vs/workbench/services/integrity/common/integrity';
 import { EditorWorkerServiceImpl } from 'vs/editor/common/services/editorWorkerServiceImpl';
 import { IEditorWorkerService } from 'vs/editor/common/services/editorWorkerService';
 import { ExtensionService } from 'vs/workbench/services/extensions/electron-browser/extensionService';
@@ -45,7 +45,7 @@ import { InstantiationService } from 'vs/platform/instantiation/node/instantiati
 import { ILifecycleService, LifecyclePhase, WillShutdownEvent } from 'vs/platform/lifecycle/common/lifecycle';
 import { IMarkerService } from 'vs/platform/markers/common/markers';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { ISearchService, ISearchHistoryService } from 'vs/platform/search/common/search';
+import { ISearchService, ISearchHistoryService } from 'vs/workbench/services/search/common/search';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { CommandService } from 'vs/workbench/services/commands/common/commandService';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
@@ -53,7 +53,6 @@ import { IExtensionService } from 'vs/workbench/services/extensions/common/exten
 import { WorkbenchModeServiceImpl } from 'vs/workbench/services/mode/common/workbenchModeService';
 import { IModeService } from 'vs/editor/common/services/modeService';
 import { IUntitledEditorService, UntitledEditorService } from 'vs/workbench/services/untitled/common/untitledEditorService';
-import { ICrashReporterService, NullCrashReporterService, CrashReporterService } from 'vs/workbench/services/crashReporter/electron-browser/crashReporterService';
 import { getDelayedChannel, IPCClient } from 'vs/base/parts/ipc/node/ipc';
 import { connect as connectNet } from 'vs/base/parts/ipc/node/ipc.net';
 import { ExtensionManagementChannelClient } from 'vs/platform/extensionManagement/node/extensionManagementIpc';
@@ -70,24 +69,22 @@ import { registerThemingParticipant, ITheme, ICssStyleCollector, HIGH_CONTRAST }
 import { foreground, selectionBackground, focusBorder, scrollbarShadow, scrollbarSliderActiveBackground, scrollbarSliderBackground, scrollbarSliderHoverBackground, listHighlightForeground, inputPlaceholderForeground } from 'vs/platform/theme/common/colorRegistry';
 import { TextMateService } from 'vs/workbench/services/textMate/electron-browser/TMSyntax';
 import { ITextMateService } from 'vs/workbench/services/textMate/electron-browser/textMateService';
-import { IBroadcastService, BroadcastService } from 'vs/platform/broadcast/electron-browser/broadcastService';
+import { IBroadcastService, BroadcastService } from 'vs/workbench/services/broadcast/electron-browser/broadcastService';
 import { HashService } from 'vs/workbench/services/hash/node/hashService';
 import { IHashService } from 'vs/workbench/services/hash/common/hashService';
 import { ILogService } from 'vs/platform/log/common/log';
-import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
-import { DelegatingStorageService } from 'vs/platform/storage/node/storageService';
+import { IStorageService } from 'vs/platform/storage/common/storage';
+import { StorageService } from 'vs/platform/storage/node/storageService';
 import { Event, Emitter } from 'vs/base/common/event';
 import { WORKBENCH_BACKGROUND } from 'vs/workbench/common/theme';
 import { LocalizationsChannelClient } from 'vs/platform/localizations/node/localizationsIpc';
 import { ILocalizationsService } from 'vs/platform/localizations/common/localizations';
-import { IWorkbenchIssueService } from 'vs/workbench/services/issue/common/issue';
-import { WorkbenchIssueService } from 'vs/workbench/services/issue/electron-browser/workbenchIssueService';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { NotificationService } from 'vs/workbench/services/notification/common/notificationService';
 import { IDialogService } from 'vs/platform/dialogs/common/dialogs';
 import { DialogService } from 'vs/workbench/services/dialogs/electron-browser/dialogService';
 import { DialogChannel } from 'vs/platform/dialogs/node/dialogIpc';
-import { EventType, addDisposableListener, addClass, scheduleAtNextAnimationFrame } from 'vs/base/browser/dom';
+import { EventType, addDisposableListener, scheduleAtNextAnimationFrame, addClasses } from 'vs/base/browser/dom';
 import { IRemoteAgentService } from 'vs/workbench/services/remote/node/remoteAgentService';
 import { RemoteAgentService } from 'vs/workbench/services/remote/electron-browser/remoteAgentServiceImpl';
 import { IOpenerService } from 'vs/platform/opener/common/opener';
@@ -96,14 +93,17 @@ import { SearchHistoryService } from 'vs/workbench/services/search/node/searchHi
 import { ExtensionManagementServerService } from 'vs/workbench/services/extensions/node/extensionManagementServerService';
 import { ExtensionGalleryService } from 'vs/platform/extensionManagement/node/extensionGalleryService';
 import { LogLevelSetterChannel } from 'vs/platform/log/node/logIpc';
-import { ILabelService, LabelService } from 'vs/platform/label/common/label';
+import { ILabelService } from 'vs/platform/label/common/label';
 import { IDownloadService } from 'vs/platform/download/common/download';
 import { DownloadService } from 'vs/platform/download/node/downloadService';
 import { DownloadServiceChannel } from 'vs/platform/download/node/downloadIpc';
 import { TextResourcePropertiesService } from 'vs/workbench/services/textfile/electron-browser/textResourcePropertiesService';
-import { MulitExtensionManagementService } from 'vs/platform/extensionManagement/node/multiExtensionManagement';
+import { MultiExtensionManagementService } from 'vs/workbench/services/extensionManagement/node/multiExtensionManagement';
 import { IRemoteAuthorityResolverService } from 'vs/platform/remote/common/remoteAuthorityResolver';
-import { RemoteAuthorityResolverChannelClient } from 'vs/platform/remote/electron-browser/remoteAuthorityResolverService';
+import { RemoteAuthorityResolverService } from 'vs/platform/remote/electron-browser/remoteAuthorityResolverService';
+import { IMarkerDecorationsService } from 'vs/editor/common/services/markersDecorationService';
+import { MarkerDecorationsService } from 'vs/editor/common/services/markerDecorationsServiceImpl';
+import { LabelService } from 'vs/workbench/services/label/common/labelService';
 
 /**
  * Services that we require for the Shell
@@ -113,19 +113,19 @@ export interface ICoreServices {
 	configurationService: IConfigurationService;
 	environmentService: IEnvironmentService;
 	logService: ILogService;
-	storageService: DelegatingStorageService;
+	storageService: StorageService;
 }
 
 /**
  * The workbench shell contains the workbench with a rich header containing navigation and the activity bar.
  * With the Shell being the top level element in the page, it is also responsible for driving the layouting.
  */
-export class WorkbenchShell extends Disposable {
+export class Shell extends Disposable {
 
 	private readonly _onWillShutdown = this._register(new Emitter<WillShutdownEvent>());
 	get onWillShutdown(): Event<WillShutdownEvent> { return this._onWillShutdown.event; }
 
-	private storageService: DelegatingStorageService;
+	private storageService: StorageService;
 	private environmentService: IEnvironmentService;
 	private logService: ILogService;
 	private configurationService: IConfigurationService;
@@ -212,18 +212,13 @@ export class WorkbenchShell extends Disposable {
 
 				// Startup Telemetry
 				this.logStartupTelemetry(startupInfos);
-
-				// Storage Telemetry (TODO@Ben remove me later, including storage errors)
-				if (!this.environmentService.extensionTestsPath) {
-					this.logStorageTelemetry();
-				}
 			}, error => handleStartupError(this.logService, error));
 
 			return workbench;
 		} catch (error) {
 			handleStartupError(this.logService, error);
 
-			return void 0;
+			return undefined;
 		}
 	}
 
@@ -270,110 +265,13 @@ export class WorkbenchShell extends Disposable {
 		perf.mark('didStartWorkbench');
 	}
 
-	private logStorageTelemetry(): void {
-		const initialStartup = !!this.configuration.isInitialStartup;
-
-		const appReadyDuration = initialStartup ? perf.getDuration('main:started', 'main:appReady') : 0;
-		const workbenchReadyDuration = perf.getDuration(initialStartup ? 'main:started' : 'main:loadWindow', 'didStartWorkbench');
-		const workspaceStorageRequireDuration = perf.getDuration('willRequireSQLite', 'didRequireSQLite');
-		const workspaceStorageSchemaDuration = perf.getDuration('willSetupSQLiteSchema', 'didSetupSQLiteSchema');
-		const globalStorageInitDuration = perf.getDuration('main:willInitGlobalStorage', 'main:didInitGlobalStorage');
-		const workspaceStorageInitDuration = perf.getDuration('willInitWorkspaceStorage', 'didInitWorkspaceStorage');
-		const workspaceStorageFileExistsDuration = perf.getDuration('willCheckWorkspaceStorageExists', 'didCheckWorkspaceStorageExists');
-		const workspaceStorageMigrationDuration = perf.getDuration('willMigrateWorkspaceStorageKeys', 'didMigrateWorkspaceStorageKeys');
-		const workbenchLoadDuration = perf.getDuration('willLoadWorkbenchMain', 'didLoadWorkbenchMain');
-		const localStorageDuration = perf.getDuration('willReadLocalStorage', 'didReadLocalStorage');
-
-		// Handle errors (avoid duplicates to reduce spam)
-		const loggedStorageErrors = new Set<string>();
-		this._register(this.storageService.storage.onStorageError(error => {
-			const errorStr = `${error}`;
-
-			if (!loggedStorageErrors.has(errorStr)) {
-				loggedStorageErrors.add(errorStr);
-
-				/* __GDPR__
-					"sqliteStorageError5" : {
-						"appReadyTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workbenchReadyTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceExistsTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceMigrationTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceRequireTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceSchemaTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"globalReadTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceReadTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"localStorageTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workbenchRequireTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"workspaceKeys" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"startupKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-						"storageError": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-					}
-				*/
-				this.telemetryService.publicLog('sqliteStorageError5', {
-					'appReadyTime': appReadyDuration,
-					'workbenchReadyTime': workbenchReadyDuration,
-					'workspaceExistsTime': workspaceStorageFileExistsDuration,
-					'workspaceMigrationTime': workspaceStorageMigrationDuration,
-					'workspaceRequireTime': workspaceStorageRequireDuration,
-					'workspaceSchemaTime': workspaceStorageSchemaDuration,
-					'globalReadTime': globalStorageInitDuration,
-					'workspaceReadTime': workspaceStorageInitDuration,
-					'localStorageTime': localStorageDuration,
-					'workbenchRequireTime': workbenchLoadDuration,
-					'workspaceKeys': this.storageService.storage.getSize(StorageScope.WORKSPACE),
-					'startupKind': this.lifecycleService.startupKind,
-					'storageError': errorStr
-				});
-			}
-		}));
-
-
-		if (this.storageService.storage.hasErrors) {
-			return; // do not log performance numbers when errors occured
-		}
-
-		if (this.environmentService.verbose) {
-			return; // do not log when running in verbose mode
-		}
-
-		/* __GDPR__
-			"sqliteStorageTimers5" : {
-				"appReadyTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workbenchReadyTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceExistsTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceMigrationTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceRequireTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceSchemaTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"globalReadTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceReadTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"localStorageTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workbenchRequireTime" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"workspaceKeys" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
-				"startupKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
-			}
-		*/
-		this.telemetryService.publicLog('sqliteStorageTimers5', {
-			'appReadyTime': appReadyDuration,
-			'workbenchReadyTime': workbenchReadyDuration,
-			'workspaceExistsTime': workspaceStorageFileExistsDuration,
-			'workspaceMigrationTime': workspaceStorageMigrationDuration,
-			'workspaceRequireTime': workspaceStorageRequireDuration,
-			'workspaceSchemaTime': workspaceStorageSchemaDuration,
-			'globalReadTime': globalStorageInitDuration,
-			'workspaceReadTime': workspaceStorageInitDuration,
-			'localStorageTime': localStorageDuration,
-			'workbenchRequireTime': workbenchLoadDuration,
-			'workspaceKeys': this.storageService.storage.getSize(StorageScope.WORKSPACE),
-			'startupKind': this.lifecycleService.startupKind
-		});
-	}
 
 	private initServiceCollection(container: HTMLElement): [IInstantiationService, ServiceCollection] {
 		const serviceCollection = new ServiceCollection();
 		serviceCollection.set(IWorkspaceContextService, this.contextService);
 		serviceCollection.set(IConfigurationService, this.configurationService);
 		serviceCollection.set(IEnvironmentService, this.environmentService);
-		serviceCollection.set(ILabelService, new SyncDescriptor(LabelService));
+		serviceCollection.set(ILabelService, new SyncDescriptor(LabelService, undefined, true));
 		serviceCollection.set(ILogService, this._register(this.logService));
 		serviceCollection.set(IStorageService, this.storageService);
 
@@ -392,14 +290,15 @@ export class WorkbenchShell extends Disposable {
 		serviceCollection.set(IWindowService, new SyncDescriptor(WindowService, [this.configuration.windowId, this.configuration]));
 
 		const sharedProcess = (<IWindowsService>serviceCollection.get(IWindowsService)).whenSharedProcessReady()
-			.then(() => connectNet(this.environmentService.sharedIPCHandle, `window:${this.configuration.windowId}`));
+			.then(() => connectNet(this.environmentService.sharedIPCHandle, `window:${this.configuration.windowId}`))
+			.then(client => {
+				client.registerChannel('dialog', instantiationService.createInstance(DialogChannel));
 
-		sharedProcess.then(client => {
-			client.registerChannel('dialog', instantiationService.createInstance(DialogChannel));
-		});
+				return client;
+			});
 
 		// Hash
-		serviceCollection.set(IHashService, new SyncDescriptor(HashService));
+		serviceCollection.set(IHashService, new SyncDescriptor(HashService, undefined, true));
 
 		// Telemetry
 		if (!this.environmentService.isExtensionDevelopment && !this.environmentService.args['disable-telemetry'] && !!product.enableTelemetry) {
@@ -419,12 +318,6 @@ export class WorkbenchShell extends Disposable {
 		serviceCollection.set(ITelemetryService, this.telemetryService);
 		this._register(configurationTelemetry(this.telemetryService, this.configurationService));
 
-		let crashReporterService = NullCrashReporterService;
-		if (!this.environmentService.disableCrashReporter && product.crashReporter && product.hockeyApp) {
-			crashReporterService = instantiationService.createInstance(CrashReporterService);
-		}
-		serviceCollection.set(ICrashReporterService, crashReporterService);
-
 		serviceCollection.set(IDialogService, instantiationService.createInstance(DialogService));
 
 		const lifecycleService = instantiationService.createInstance(LifecycleService);
@@ -433,12 +326,11 @@ export class WorkbenchShell extends Disposable {
 		serviceCollection.set(ILifecycleService, lifecycleService);
 		this.lifecycleService = lifecycleService;
 
-		serviceCollection.set(IRequestService, new SyncDescriptor(RequestService));
-		serviceCollection.set(IDownloadService, new SyncDescriptor(DownloadService));
-		serviceCollection.set(IExtensionGalleryService, new SyncDescriptor(ExtensionGalleryService));
+		serviceCollection.set(IRequestService, new SyncDescriptor(RequestService, undefined, true));
+		serviceCollection.set(IDownloadService, new SyncDescriptor(DownloadService, undefined, true));
+		serviceCollection.set(IExtensionGalleryService, new SyncDescriptor(ExtensionGalleryService, undefined, true));
 
-		const remoteAuthorityResolverChannel = getDelayedChannel(sharedProcess.then(c => c.getChannel('remoteAuthorityResolver')));
-		const remoteAuthorityResolverService = new RemoteAuthorityResolverChannelClient(remoteAuthorityResolverChannel);
+		const remoteAuthorityResolverService = new RemoteAuthorityResolverService();
 		serviceCollection.set(IRemoteAuthorityResolverService, remoteAuthorityResolverService);
 
 		const remoteAgentService = new RemoteAgentService(this.configuration, this.notificationService, this.environmentService, remoteAuthorityResolverService);
@@ -454,7 +346,7 @@ export class WorkbenchShell extends Disposable {
 		const extensionManagementChannel = getDelayedChannel(sharedProcess.then(c => c.getChannel('extensions')));
 		const extensionManagementChannelClient = new ExtensionManagementChannelClient(extensionManagementChannel);
 		serviceCollection.set(IExtensionManagementServerService, new SyncDescriptor(ExtensionManagementServerService, [extensionManagementChannelClient]));
-		serviceCollection.set(IExtensionManagementService, new SyncDescriptor(MulitExtensionManagementService));
+		serviceCollection.set(IExtensionManagementService, new SyncDescriptor(MultiExtensionManagementService));
 
 		const extensionEnablementService = this._register(instantiationService.createInstance(ExtensionEnablementService));
 		serviceCollection.set(IExtensionEnablementService, extensionEnablementService);
@@ -464,9 +356,9 @@ export class WorkbenchShell extends Disposable {
 		this.themeService = instantiationService.createInstance(WorkbenchThemeService, document.body);
 		serviceCollection.set(IWorkbenchThemeService, this.themeService);
 
-		serviceCollection.set(ICommandService, new SyncDescriptor(CommandService));
+		serviceCollection.set(ICommandService, new SyncDescriptor(CommandService, undefined, true));
 
-		serviceCollection.set(IMarkerService, new SyncDescriptor(MarkerService));
+		serviceCollection.set(IMarkerService, new SyncDescriptor(MarkerService, undefined, true));
 
 		serviceCollection.set(IModeService, new SyncDescriptor(WorkbenchModeServiceImpl));
 
@@ -474,11 +366,13 @@ export class WorkbenchShell extends Disposable {
 
 		serviceCollection.set(ITextResourcePropertiesService, new SyncDescriptor(TextResourcePropertiesService));
 
-		serviceCollection.set(IModelService, new SyncDescriptor(ModelServiceImpl));
+		serviceCollection.set(IModelService, new SyncDescriptor(ModelServiceImpl, undefined, true));
+
+		serviceCollection.set(IMarkerDecorationsService, new SyncDescriptor(MarkerDecorationsService));
 
 		serviceCollection.set(IEditorWorkerService, new SyncDescriptor(EditorWorkerServiceImpl));
 
-		serviceCollection.set(IUntitledEditorService, new SyncDescriptor(UntitledEditorService));
+		serviceCollection.set(IUntitledEditorService, new SyncDescriptor(UntitledEditorService, undefined, true));
 
 		serviceCollection.set(ITextMateService, new SyncDescriptor(TextMateService));
 
@@ -486,11 +380,9 @@ export class WorkbenchShell extends Disposable {
 
 		serviceCollection.set(ISearchHistoryService, new SyncDescriptor(SearchHistoryService));
 
-		serviceCollection.set(IWorkbenchIssueService, new SyncDescriptor(WorkbenchIssueService));
-
 		serviceCollection.set(ICodeEditorService, new SyncDescriptor(CodeEditorService));
 
-		serviceCollection.set(IOpenerService, new SyncDescriptor(OpenerService));
+		serviceCollection.set(IOpenerService, new SyncDescriptor(OpenerService, undefined, true));
 
 		serviceCollection.set(IIntegrityService, new SyncDescriptor(IntegrityServiceImpl));
 
@@ -518,7 +410,7 @@ export class WorkbenchShell extends Disposable {
 		});
 
 		// Shell Class for CSS Scoping
-		addClass(this.container, 'monaco-shell');
+		addClasses(this.container, 'monaco-shell', platform.isWindows ? 'windows' : platform.isLinux ? 'linux' : 'mac');
 
 		// Create Contents
 		this.renderContents();

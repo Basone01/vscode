@@ -53,15 +53,15 @@ export class Win32UpdateService extends AbstractUpdateService {
 	private availableUpdate: IAvailableUpdate | undefined;
 
 	@memoize
-	get cachePath(): Thenable<string> {
+	get cachePath(): Promise<string> {
 		const result = path.join(tmpdir(), `vscode-update-${product.target}-${process.arch}`);
-		return pfs.mkdirp(result, null).then(() => result);
+		return pfs.mkdirp(result, undefined).then(() => result);
 	}
 
 	constructor(
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IConfigurationService configurationService: IConfigurationService,
-		@ITelemetryService private telemetryService: ITelemetryService,
+		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IRequestService requestService: IRequestService,
 		@ILogService logService: ILogService
@@ -143,7 +143,7 @@ export class Win32UpdateService extends AbstractUpdateService {
 
 							return this.requestService.request({ url }, CancellationToken.None)
 								.then(context => download(downloadPath, context))
-								.then(hash ? () => checksum(downloadPath, update.hash) : () => null)
+								.then(hash ? () => checksum(downloadPath, update.hash) : () => undefined)
 								.then(() => pfs.rename(downloadPath, updatePackagePath))
 								.then(() => updatePackagePath);
 						});
@@ -164,7 +164,7 @@ export class Win32UpdateService extends AbstractUpdateService {
 					});
 				});
 			})
-			.then(null, err => {
+			.then(undefined, err => {
 				this.logService.error(err);
 				/* __GDPR__
 					"update:notAvailable" : {
@@ -172,12 +172,17 @@ export class Win32UpdateService extends AbstractUpdateService {
 					}
 					*/
 				this.telemetryService.publicLog('update:notAvailable', { explicit: !!context });
-				this.setState(State.Idle(getUpdateType(), err.message || err));
+
+				// only show message when explicitly checking for updates
+				const message: string | undefined = !!context ? (err.message || err) : undefined;
+				this.setState(State.Idle(getUpdateType(), message));
 			});
 	}
 
 	protected async doDownloadUpdate(state: AvailableForDownload): Promise<void> {
-		shell.openExternal(state.update.url);
+		if (state.update.url) {
+			shell.openExternal(state.update.url);
+		}
 		this.setState(State.Idle(getUpdateType()));
 	}
 
@@ -205,11 +210,11 @@ export class Win32UpdateService extends AbstractUpdateService {
 
 	protected async doApplyUpdate(): Promise<void> {
 		if (this.state.type !== StateType.Downloaded && this.state.type !== StateType.Downloading) {
-			return Promise.resolve(null);
+			return Promise.resolve(undefined);
 		}
 
 		if (!this.availableUpdate) {
-			return Promise.resolve(null);
+			return Promise.resolve(undefined);
 		}
 
 		const update = this.state.update;
@@ -240,7 +245,7 @@ export class Win32UpdateService extends AbstractUpdateService {
 	}
 
 	protected doQuitAndInstall(): void {
-		if (this.state.type !== StateType.Ready) {
+		if (this.state.type !== StateType.Ready || !this.availableUpdate) {
 			return;
 		}
 

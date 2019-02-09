@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UriComponents } from 'vs/base/common/uri';
-import { RerunBehavior } from 'vs/workbench/parts/tasks/common/tasks';
+import { IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 
 export interface TaskDefinitionDTO {
 	type: string;
@@ -18,10 +18,11 @@ export interface TaskPresentationOptionsDTO {
 	panel?: number;
 	showReuseMessage?: boolean;
 	clear?: boolean;
+	group?: string;
 }
 
 export interface RunOptionsDTO {
-	rerunBehavior?: RerunBehavior;
+	reevaluateOnRerun?: boolean;
 }
 
 export interface ExecutionOptionsDTO {
@@ -61,7 +62,7 @@ export interface ShellQuotedStringDTO {
 export interface ShellExecutionDTO {
 	commandLine?: string;
 	command?: string | ShellQuotedStringDTO;
-	args?: (string | ShellQuotedStringDTO)[];
+	args?: Array<string | ShellQuotedStringDTO>;
 	options?: ShellExecutionOptionsDTO;
 }
 
@@ -78,16 +79,21 @@ export interface TaskHandleDTO {
 
 export interface TaskDTO {
 	_id: string;
-	name: string;
-	execution: ProcessExecutionDTO | ShellExecutionDTO;
+	name?: string;
+	execution?: ProcessExecutionDTO | ShellExecutionDTO;
 	definition: TaskDefinitionDTO;
-	isBackground: boolean;
+	isBackground?: boolean;
 	source: TaskSourceDTO;
 	group?: string;
-	presentationOptions: TaskPresentationOptionsDTO;
+	presentationOptions?: TaskPresentationOptionsDTO;
 	problemMatchers: string[];
 	hasDefinedMatchers: boolean;
-	runOptions: RunOptionsDTO;
+	runOptions?: RunOptionsDTO;
+}
+
+export interface TaskSetDTO {
+	tasks: TaskDTO[];
+	extension: IExtensionDescription;
 }
 
 export interface TaskExecutionDTO {

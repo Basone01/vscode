@@ -17,13 +17,14 @@ import { URI } from 'vs/base/common/uri';
 import { localize } from 'vs/nls';
 import { ILogService } from 'vs/platform/log/common/log';
 import { Severity } from 'vs/platform/notification/common/notification';
-import { IRawFileMatch2, resultIsMatch } from 'vs/platform/search/common/search';
+import { IRawFileMatch2, resultIsMatch } from 'vs/workbench/services/search/common/search';
 import { Workspace, WorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { Range, RelativePattern } from 'vs/workbench/api/node/extHostTypes';
-import { ITextQueryBuilderOptions } from 'vs/workbench/parts/search/common/queryBuilder';
+import { ITextQueryBuilderOptions } from 'vs/workbench/contrib/search/common/queryBuilder';
 import { IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 import * as vscode from 'vscode';
 import { ExtHostWorkspaceShape, IMainContext, IWorkspaceData, MainContext, MainThreadMessageServiceShape, MainThreadWorkspaceShape } from './extHost.protocol';
+import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 
 function isFolderEqual(folderA: URI, folderB: URI): boolean {
 	return isEqual(folderA, folderB, !isLinux);
@@ -55,7 +56,7 @@ interface MutableWorkspaceFolder extends vscode.WorkspaceFolder {
 
 class ExtHostWorkspaceImpl extends Workspace {
 
-	static toExtHostWorkspace(data: IWorkspaceData, previousConfirmedWorkspace?: ExtHostWorkspaceImpl, previousUnconfirmedWorkspace?: ExtHostWorkspaceImpl): { workspace: ExtHostWorkspaceImpl, added: vscode.WorkspaceFolder[], removed: vscode.WorkspaceFolder[] } {
+	static toExtHostWorkspace(data: IWorkspaceData, previousConfirmedWorkspace?: ExtHostWorkspaceImpl, previousUnconfirmedWorkspace?: ExtHostWorkspaceImpl): { workspace: ExtHostWorkspaceImpl | null, added: vscode.WorkspaceFolder[], removed: vscode.WorkspaceFolder[] } {
 		if (!data) {
 			return { workspace: null, added: [], removed: [] };
 		}
@@ -94,7 +95,7 @@ class ExtHostWorkspaceImpl extends Workspace {
 		return { workspace, added, removed };
 	}
 
-	private static _findFolder(workspace: ExtHostWorkspaceImpl, folderUriToFind: URI): MutableWorkspaceFolder {
+	private static _findFolder(workspace: ExtHostWorkspaceImpl, folderUriToFind: URI): MutableWorkspaceFolder | undefined {
 		for (let i = 0; i < workspace.folders.length; i++) {
 			const folder = workspace.workspaceFolders[i];
 			if (isFolderEqual(folder.uri, folderUriToFind)) {
@@ -145,7 +146,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 	private readonly _proxy: MainThreadWorkspaceShape;
 
 	private _confirmedWorkspace: ExtHostWorkspaceImpl;
-	private _unconfirmedWorkspace: ExtHostWorkspaceImpl;
+	private _unconfirmedWorkspace?: ExtHostWorkspaceImpl;
 
 	private _messageService: MainThreadMessageServiceShape;
 
@@ -170,7 +171,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		return this._actualWorkspace;
 	}
 
-	get name(): string {
+	get name(): string | undefined {
 		return this._actualWorkspace ? this._actualWorkspace.name : undefined;
 	}
 
@@ -178,7 +179,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		return this._unconfirmedWorkspace || this._confirmedWorkspace;
 	}
 
-	getWorkspaceFolders(): vscode.WorkspaceFolder[] {
+	getWorkspaceFolders(): vscode.WorkspaceFolder[] | undefined {
 		if (!this._actualWorkspace) {
 			return undefined;
 		}
@@ -232,7 +233,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		// Trigger on main side
 		if (this._proxy) {
 			const extName = extension.displayName || extension.name;
-			this._proxy.$updateWorkspaceFolders(extName, index, deleteCount, validatedDistinctWorkspaceFoldersToAdd).then(null, error => {
+			this._proxy.$updateWorkspaceFolders(extName, index, deleteCount, validatedDistinctWorkspaceFoldersToAdd).then(undefined, error => {
 
 				// in case of an error, make sure to clear out the unconfirmed workspace
 				// because we cannot expect the acknowledgement from the main side for this
@@ -256,14 +257,14 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		return this._actualWorkspace.getWorkspaceFolder(uri, resolveParent);
 	}
 
-	resolveWorkspaceFolder(uri: vscode.Uri): vscode.WorkspaceFolder {
+	resolveWorkspaceFolder(uri: vscode.Uri): vscode.WorkspaceFolder | undefined {
 		if (!this._actualWorkspace) {
 			return undefined;
 		}
 		return this._actualWorkspace.resolveWorkspaceFolder(uri);
 	}
 
-	getPath(): string {
+	getPath(): string | undefined {
 
 		// this is legacy from the days before having
 		// multi-root and we keep it only alive if there
@@ -280,9 +281,9 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		return folders[0].uri.fsPath;
 	}
 
-	getRelativePath(pathOrUri: string | vscode.Uri, includeWorkspace?: boolean): string {
+	getRelativePath(pathOrUri: string | vscode.Uri, includeWorkspace?: boolean): string | undefined {
 
-		let path: string;
+		let path: string | undefined;
 		if (typeof pathOrUri === 'string') {
 			path = pathOrUri;
 		} else if (typeof pathOrUri !== 'undefined') {
@@ -345,11 +346,11 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 
 	// --- search ---
 
-	findFiles(include: string | RelativePattern, exclude: vscode.GlobPattern, maxResults: number, extensionId: string, token: vscode.CancellationToken = CancellationToken.None): Thenable<vscode.Uri[]> {
-		this._logService.trace(`extHostWorkspace#findFiles: fileSearch, extension: ${extensionId}, entryPoint: findFiles`);
+	findFiles(include: string | RelativePattern, exclude: vscode.GlobPattern, maxResults: number, extensionId: ExtensionIdentifier, token: vscode.CancellationToken = CancellationToken.None): Promise<vscode.Uri[]> {
+		this._logService.trace(`extHostWorkspace#findFiles: fileSearch, extension: ${extensionId.value}, entryPoint: findFiles`);
 
-		let includePattern: string;
-		let includeFolder: URI;
+		let includePattern: string | undefined;
+		let includeFolder: URI | undefined;
 		if (include) {
 			if (typeof include === 'string') {
 				includePattern = include;
@@ -361,7 +362,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 			}
 		}
 
-		let excludePatternOrDisregardExcludes: string | false;
+		let excludePatternOrDisregardExcludes: string | false | undefined;
 		if (exclude === null) {
 			excludePatternOrDisregardExcludes = false;
 		} else if (exclude) {
@@ -380,8 +381,8 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 			.then(data => Array.isArray(data) ? data.map(URI.revive) : []);
 	}
 
-	findTextInFiles(query: vscode.TextSearchQuery, options: vscode.FindTextInFilesOptions, callback: (result: vscode.TextSearchResult) => void, extensionId: string, token: vscode.CancellationToken = CancellationToken.None): Thenable<vscode.TextSearchComplete> {
-		this._logService.trace(`extHostWorkspace#findTextInFiles: textSearch, extension: ${extensionId}, entryPoint: findTextInFiles`);
+	findTextInFiles(query: vscode.TextSearchQuery, options: vscode.FindTextInFilesOptions, callback: (result: vscode.TextSearchResult) => void, extensionId: ExtensionIdentifier, token: vscode.CancellationToken = CancellationToken.None): Promise<vscode.TextSearchComplete | undefined> {
+		this._logService.trace(`extHostWorkspace#findTextInFiles: textSearch, extension: ${extensionId.value}, entryPoint: findTextInFiles`);
 
 		const requestId = this._requestIdProvider.getNext();
 
@@ -412,7 +413,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 			beforeContext: options.beforeContext,
 
 			includePattern: options.include && globPatternToString(options.include),
-			excludePattern: options.exclude && globPatternToString(options.exclude)
+			excludePattern: options.exclude ? globPatternToString(options.exclude) : undefined
 		};
 
 		let isCanceled = false;
@@ -423,7 +424,7 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 			}
 
 			const uri = URI.revive(p.resource);
-			p.results.forEach(result => {
+			p.results!.forEach(result => {
 				if (resultIsMatch(result)) {
 					callback(<vscode.TextSearchMatch>{
 						uri,
@@ -466,11 +467,11 @@ export class ExtHostWorkspace implements ExtHostWorkspaceShape {
 		}
 	}
 
-	saveAll(includeUntitled?: boolean): Thenable<boolean> {
+	saveAll(includeUntitled?: boolean): Promise<boolean> {
 		return this._proxy.$saveAll(includeUntitled);
 	}
 
-	resolveProxy(url: string): Thenable<string> {
+	resolveProxy(url: string): Promise<string | undefined> {
 		return this._proxy.$resolveProxy(url);
 	}
 }

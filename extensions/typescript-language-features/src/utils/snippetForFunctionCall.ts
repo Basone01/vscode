@@ -15,8 +15,9 @@ export function snippetForFunctionCall(
 		return { snippet: item.insertText, parameterCount: 0 };
 	}
 
-	const parameterListParts = getParameterListParts(displayParts, item.label);
-	const snippet = new vscode.SnippetString(`${item.insertText || item.label}(`);
+	const parameterListParts = getParameterListParts(displayParts);
+	const snippet = new vscode.SnippetString();
+	snippet.appendText(`${item.insertText || item.label}(`);
 	appendJoinedPlaceholders(snippet, parameterListParts.parts, ', ');
 	if (parameterListParts.hasOptionalParameters) {
 		snippet.appendTabstop();
@@ -46,12 +47,13 @@ interface ParamterListParts {
 }
 
 function getParameterListParts(
-	displayParts: ReadonlyArray<Proto.SymbolDisplayPart>, label: string
+	displayParts: ReadonlyArray<Proto.SymbolDisplayPart>
 ): ParamterListParts {
 	const parts: Proto.SymbolDisplayPart[] = [];
 	let isInMethod = false;
 	let hasOptionalParameters = false;
 	let parenCount = 0;
+	let braceCount = 0;
 
 	outer: for (let i = 0; i < displayParts.length; ++i) {
 		const part = displayParts[i];
@@ -60,13 +62,13 @@ function getParameterListParts(
 			case PConst.DisplayPartKind.functionName:
 			case PConst.DisplayPartKind.text:
 			case PConst.DisplayPartKind.propertyName:
-				if (part.text === label && parenCount === 0) {
+				if (parenCount === 0 && braceCount === 0) {
 					isInMethod = true;
 				}
 				break;
 
 			case PConst.DisplayPartKind.parameterName:
-				if (parenCount === 1 && isInMethod) {
+				if (parenCount === 1 && braceCount === 0 && isInMethod) {
 					// Only take top level paren names
 					const next = displayParts[i + 1];
 					// Skip optional parameters
@@ -90,6 +92,10 @@ function getParameterListParts(
 					// Found rest parmeter. Do not fill in any further arguments
 					hasOptionalParameters = true;
 					break outer;
+				} else if (part.text === '{') {
+					++braceCount;
+				} else if (part.text === '}') {
+					--braceCount;
 				}
 				break;
 		}

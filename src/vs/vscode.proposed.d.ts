@@ -16,14 +16,58 @@
 
 declare module 'vscode' {
 
-	export namespace window {
-		export function sampleFunction(): Thenable<any>;
+	//#region Joh - selection range provider
+
+	export class SelectionRangeKind {
+
+		/**
+		 * Empty Kind.
+		 */
+		static readonly Empty: SelectionRangeKind;
+
+		/**
+		 * The statement kind, its value is `statement`, possible extensions can be
+		 * `statement.if` etc
+		 */
+		static readonly Statement: SelectionRangeKind;
+
+		/**
+		 * The declaration kind, its value is `declaration`, possible extensions can be
+		 * `declaration.function`, `declaration.class` etc.
+		 */
+		static readonly Declaration: SelectionRangeKind;
+
+		readonly value: string;
+
+		private constructor(value: string);
+
+		append(value: string): SelectionRangeKind;
 	}
+
+	export class SelectionRange {
+		kind: SelectionRangeKind;
+		range: Range;
+		constructor(range: Range, kind: SelectionRangeKind);
+	}
+
+	export interface SelectionRangeProvider {
+		/**
+		 * Provide selection ranges starting at a given position. The first range must [contain](#Range.contains)
+		 * position and subsequent ranges must contain the previous range.
+		 */
+		provideSelectionRanges(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<SelectionRange[]>;
+	}
+
+	export namespace languages {
+		export function registerSelectionRangeProvider(selector: DocumentSelector, provider: SelectionRangeProvider): Disposable;
+	}
+
+	//#endregion
 
 	//#region Joh - read/write in chunks
 
 	export interface FileSystemProvider {
-		open?(resource: Uri): number | Thenable<number>;
+		open?(resource: Uri, options: { create: boolean }): number | Thenable<number>;
 		close?(fd: number): void | Thenable<void>;
 		read?(fd: number, pos: number, data: Uint8Array, offset: number, length: number): number | Thenable<number>;
 		write?(fd: number, pos: number, data: Uint8Array, offset: number, length: number): number | Thenable<number>;
@@ -194,6 +238,12 @@ declare module 'vscode' {
 		 * The maximum number of results to be returned.
 		 */
 		maxResults?: number;
+
+		/**
+		 * A CancellationToken that represents the session for this search query. If the provider chooses to, this object can be used as the key for a cache,
+		 * and searches with the same session object can search the same cache. When the token is cancelled, the session is complete and the cache can be cleared.
+		 */
+		session?: CancellationToken;
 	}
 
 	/**
@@ -504,43 +554,6 @@ declare module 'vscode' {
 
 	//#region André: debug
 
-	/**
-	 * A Debug Adapter Tracker is a means to track the communication between VS Code and a Debug Adapter.
-	 */
-	export interface DebugAdapterTracker {
-		// VS Code -> Debug Adapter
-		startDebugAdapter?(): void;
-		toDebugAdapter?(message: any): void;
-		stopDebugAdapter?(): void;
-
-		// Debug Adapter -> VS Code
-		fromDebugAdapter?(message: any): void;
-		debugAdapterError?(error: Error): void;
-		debugAdapterExit?(code?: number, signal?: string): void;
-	}
-
-	export interface DebugAdapterTrackerFactory {
-		/**
-		 * The method 'createDebugAdapterTracker' is called at the start of a debug session in order
-		 * to return a "tracker" object that provides read-access to the communication between VS Code and a debug adapter.
-		 *
-		 * @param session The [debug session](#DebugSession) for which the debug adapter tracker will be used.
-		 * @return A [debug adapter tracker](#DebugAdapterTracker) or undefined.
-		 */
-		createDebugAdapterTracker(session: DebugSession): ProviderResult<DebugAdapterTracker>;
-	}
-
-	export namespace debug {
-		/**
-		 * Register a debug adapter tracker factory for the given debug type.
-		 *
-		 * @param debugType The debug type for which the factory is registered or '*' for matching all debug types.
-		 * @param factory The [debug adapter tracker factory](#DebugAdapterTrackerFactory) to register.
-		 * @return A [disposable](#Disposable) that unregisters this factory when being disposed.
-		 */
-		export function registerDebugAdapterTrackerFactory(debugType: string, factory: DebugAdapterTrackerFactory): Disposable;
-	}
-
 	// deprecated
 
 	export interface DebugConfigurationProvider {
@@ -549,16 +562,6 @@ declare module 'vscode' {
 		 * @deprecated Use DebugAdapterDescriptorFactory.createDebugAdapterDescriptor instead
 		 */
 		debugAdapterExecutable?(folder: WorkspaceFolder | undefined, token?: CancellationToken): ProviderResult<DebugAdapterExecutable>;
-
-		/**
-		 * Deprecated, use DebugAdapterTrackerFactory.createDebugAdapterTracker instead.
-		 * @deprecated Use DebugAdapterTrackerFactory.createDebugAdapterTracker instead
-		 *
-		 * The optional method 'provideDebugAdapterTracker' is called at the start of a debug session to provide a tracker that gives access to the communication between VS Code and a Debug Adapter.
-		 * @param session The [debug session](#DebugSession) for which the tracker will be used.
-		 * @param token A cancellation token.
-		 */
-		provideDebugAdapterTracker?(session: DebugSession, workspaceFolder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterTracker>;
 	}
 
 	//#endregion
@@ -790,6 +793,7 @@ declare module 'vscode' {
 		command?: Command;
 
 		isDraft?: boolean;
+		commentReactions?: CommentReaction[];
 	}
 
 	export interface CommentThreadChangedEvent {
@@ -812,6 +816,11 @@ declare module 'vscode' {
 		 * Changed draft mode
 		 */
 		readonly inDraftMode: boolean;
+	}
+
+	interface CommentReaction {
+		readonly label?: string;
+		readonly hasReacted?: boolean;
 	}
 
 	interface DocumentCommentProvider {
@@ -840,13 +849,17 @@ declare module 'vscode' {
 		 */
 		deleteComment?(document: TextDocument, comment: Comment, token: CancellationToken): Promise<void>;
 
-		startDraft?(token: CancellationToken): Promise<void>;
-		deleteDraft?(token: CancellationToken): Promise<void>;
-		finishDraft?(token: CancellationToken): Promise<void>;
+		startDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
+		deleteDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
+		finishDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
 
 		startDraftLabel?: string;
 		deleteDraftLabel?: string;
 		finishDraftLabel?: string;
+
+		addReaction?(document: TextDocument, comment: Comment, reaction: CommentReaction): Promise<void>;
+		deleteReaction?(document: TextDocument, comment: Comment, reaction: CommentReaction): Promise<void>;
+		reactionGroup?: CommentReaction[];
 
 		/**
 		 * Notify of updates to comment threads.
@@ -875,13 +888,41 @@ declare module 'vscode' {
 
 	//#region Terminal
 
+	/**
+	 * An [event](#Event) which fires when a [Terminal](#Terminal)'s dimensions change.
+	 */
+	export interface TerminalDimensionsChangeEvent {
+		/**
+		 * The [terminal](#Terminal) for which the dimensions have changed.
+		 */
+		readonly terminal: Terminal;
+		/**
+		 * The new value for the [terminal's dimensions](#Terminal.dimensions).
+		 */
+		readonly dimensions: TerminalDimensions;
+	}
+
+	namespace window {
+		/**
+		 * An event which fires when the [dimensions](#Terminal.dimensions) of the terminal change.
+		 */
+		export const onDidChangeTerminalDimensions: Event<TerminalDimensionsChangeEvent>;
+	}
+
 	export interface Terminal {
+		/**
+		 * The current dimensions of the terminal. This will be `undefined` immediately after the
+		 * terminal is created as the dimensions are not known until shortly after the terminal is
+		 * created.
+		 */
+		readonly dimensions: TerminalDimensions | undefined;
+
 		/**
 		 * Fires when the terminal's pty slave pseudo-device is written to. In other words, this
 		 * provides access to the raw data stream from the process running within the terminal,
 		 * including VT sequences.
 		 */
-		onDidWriteData: Event<string>;
+		readonly onDidWriteData: Event<string>;
 	}
 
 	/**
@@ -902,7 +943,7 @@ declare module 'vscode' {
 	/**
 	 * Represents a terminal without a process where all interaction and output in the terminal is
 	 * controlled by an extension. This is similar to an output window but has the same VT sequence
-	 * compatility as the regular terminal.
+	 * compatibility as the regular terminal.
 	 *
 	 * Note that an instance of [Terminal](#Terminal) will be created when a TerminalRenderer is
 	 * created with all its APIs available for use by extensions. When using the Terminal object
@@ -950,7 +991,7 @@ declare module 'vscode' {
 		readonly maximumDimensions: TerminalDimensions | undefined;
 
 		/**
-		 * The corressponding [Terminal](#Terminal) for this TerminalRenderer.
+		 * The corresponding [Terminal](#Terminal) for this TerminalRenderer.
 		 */
 		readonly terminal: Terminal;
 
@@ -982,9 +1023,9 @@ declare module 'vscode' {
 		 * ```typescript
 		 * const terminalRenderer = window.createTerminalRenderer('test');
 		 * terminalRenderer.onDidAcceptInput(data => {
-		 *   cosole.log(data); // 'Hello world'
+		 *   console.log(data); // 'Hello world'
 		 * });
-		 * terminalRenderer.terminal.then(t => t.sendText('Hello world'));
+		 * terminalRenderer.terminal.sendText('Hello world');
 		 * ```
 		 */
 		readonly onDidAcceptInput: Event<string>;
@@ -1030,72 +1071,6 @@ declare module 'vscode' {
 	export namespace workspace {
 		export const onWillRenameFile: Event<FileWillRenameEvent>;
 		export const onDidRenameFile: Event<FileRenameEvent>;
-	}
-	//#endregion
-
-	//#region Signature Help
-	/**
-	 * How a [Signature provider](#SignatureHelpProvider) was triggered
-	 */
-	export enum SignatureHelpTriggerReason {
-		/**
-		 * Signature help was invoked manually by the user or by a command.
-		 */
-		Invoke = 1,
-
-		/**
-		 * Signature help was triggered by a trigger character.
-		 */
-		TriggerCharacter = 2,
-
-		/**
-		 * Signature help was triggered by the cursor moving or by the document content changing.
-		 */
-		ContentChange = 3,
-	}
-
-	/**
-	 * Contains additional information about the context in which a
-	 * [signature help provider](#SignatureHelpProvider.provideSignatureHelp) is triggered.
-	 */
-	export interface SignatureHelpContext {
-		/**
-		 * Action that caused signature help to be requested.
-		 */
-		readonly triggerReason: SignatureHelpTriggerReason;
-
-		/**
-		 * Character that caused signature help to be requested.
-		 *
-		 * This is `undefined` when signature help is not triggered by typing, such as when invoking signature help
-		 * or when moving the cursor.
-		 */
-		readonly triggerCharacter?: string;
-
-		/**
-		 * Whether or not signature help was previously showing when triggered.
-		 *
-		 * Retriggers occur when the signature help is already active and can be caused by typing a trigger character
-		 * or by a cursor move.
-		 */
-		readonly isRetrigger: boolean;
-	}
-
-	export interface SignatureHelpProvider {
-		provideSignatureHelp(document: TextDocument, position: Position, token: CancellationToken, context: SignatureHelpContext): ProviderResult<SignatureHelp>;
-	}
-
-	export interface SignatureHelpProviderMetadata {
-		readonly triggerCharacters: ReadonlyArray<string>;
-		readonly retriggerCharacters: ReadonlyArray<string>;
-	}
-
-	namespace languages {
-		export function registerSignatureHelpProvider(
-			selector: DocumentSelector,
-			provider: SignatureHelpProvider,
-			metadata: SignatureHelpProviderMetadata
-		): Disposable;
 	}
 	//#endregion
 
@@ -1151,43 +1126,36 @@ declare module 'vscode' {
 	}
 	//#endregion
 
-	//#region Task
-	export enum RerunBehavior {
-		reevaluate = 1,
-		useEvaluated = 2,
-	}
-
-
-	export interface RunOptions {
+	//#region CodeAction.isPreferred - mjbvz
+	export interface CodeAction {
 		/**
-		 * Controls the behavior of a task when it is rerun.
+		 * Marks this as a preferred action. Preferred actions are used by the `auto fix` command.
+		 *
+		 * A quick fix should be marked preferred if it properly addresses the underlying error.
+		 * A refactoring should be marked preferred if it is the most reasonable choice of actions to take.
 		 */
-		rerunBehavior?: RerunBehavior;
-	}
-
-	/**
-	 * A task to execute
-	 */
-	export class Task2 extends Task {
-		/**
-		 * Run options for the task.  Defaults to an empty literal.
-		 */
-		runOptions: RunOptions;
+		isPreferred?: boolean;
 	}
 	//#endregion
 
-	//#region Extension Context
-	export interface ExtensionContext {
-
+	//#region Tasks
+	export interface TaskPresentationOptions {
 		/**
-		 * An absolute file path in which the extension can store gloabal state.
-		 * The directory might not exist on disk and creation is
-		 * up to the extension. However, the parent directory is guaranteed to be existent.
-		 *
-		 * Use [`globalState`](#ExtensionContext.globalState) to store key value data.
+		 * Controls whether the task is executed in a specific terminal group using split panes.
 		 */
-		globalStoragePath: string;
+		group?: string;
+	}
+	//#endregion
 
+	//#region Autofix - mjbvz
+	export namespace CodeActionKind {
+		/**
+		 * Base kind for auto-fix source actions: `source.fixAll`.
+		 *
+		 * Fix all actions automatically fix errors that have a clear fix that do not require user input.
+		 * They should not suppress errors or perform unsafe fixes such as generating new types or classes.
+		 */
+		export const SourceFixAll: CodeActionKind;
 	}
 	//#endregion
 }

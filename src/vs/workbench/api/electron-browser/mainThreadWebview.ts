@@ -10,15 +10,17 @@ import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
 import { IOpenerService } from 'vs/platform/opener/common/opener';
 import { ExtHostContext, ExtHostWebviewsShape, IExtHostContext, MainContext, MainThreadWebviewsShape, WebviewPanelHandle, WebviewPanelShowOptions } from 'vs/workbench/api/node/extHost.protocol';
 import { editorGroupToViewColumn, EditorViewColumn, viewColumnToEditorGroup } from 'vs/workbench/api/shared/editor';
-import { WebviewEditor } from 'vs/workbench/parts/webview/electron-browser/webviewEditor';
-import { WebviewEditorInput } from 'vs/workbench/parts/webview/electron-browser/webviewEditorInput';
-import { ICreateWebViewShowOptions, IWebviewEditorService, WebviewInputOptions, WebviewReviver } from 'vs/workbench/parts/webview/electron-browser/webviewEditorService';
+import { WebviewEditor } from 'vs/workbench/contrib/webview/electron-browser/webviewEditor';
+import { WebviewEditorInput } from 'vs/workbench/contrib/webview/electron-browser/webviewEditorInput';
+import { ICreateWebViewShowOptions, IWebviewEditorService, WebviewInputOptions, WebviewReviver } from 'vs/workbench/contrib/webview/electron-browser/webviewEditorService';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
-import { IEditorGroupsService } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import * as vscode from 'vscode';
 import { extHostNamedCustomer } from './extHostCustomers';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
+import { onUnexpectedError } from 'vs/base/common/errors';
+import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 
 @extHostNamedCustomer(MainContext.MainThreadWebviews)
 export class MainThreadWebviews implements MainThreadWebviewsShape, WebviewReviver {
@@ -68,7 +70,7 @@ export class MainThreadWebviews implements MainThreadWebviewsShape, WebviewReviv
 		title: string,
 		showOptions: { viewColumn: EditorViewColumn | null, preserveFocus: boolean },
 		options: WebviewInputOptions,
-		extensionId: string,
+		extensionId: ExtensionIdentifier,
 		extensionLocation: UriComponents
 	): void {
 		const mainThreadShowOptions: ICreateWebViewShowOptions = Object.create(null);
@@ -91,7 +93,7 @@ export class MainThreadWebviews implements MainThreadWebviewsShape, WebviewReviv
 				"extensionId" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
 			}
 		*/
-		this._telemetryService.publicLog('webviews:createWebviewPanel', { extensionId: extensionId });
+		this._telemetryService.publicLog('webviews:createWebviewPanel', { extensionId: extensionId.value });
 	}
 
 	public $disposeWebview(handle: WebviewPanelHandle): void {
@@ -130,7 +132,7 @@ export class MainThreadWebviews implements MainThreadWebviewsShape, WebviewReviv
 		this._webviewService.revealWebview(webview, targetGroup || this._editorGroupService.activeGroup, showOptions.preserveFocus);
 	}
 
-	public $postMessage(handle: WebviewPanelHandle, message: any): Thenable<boolean> {
+	public $postMessage(handle: WebviewPanelHandle, message: any): Promise<boolean> {
 		const webview = this.getWebview(handle);
 		const editors = this._editorService.visibleControls
 			.filter(e => e instanceof WebviewEditor)
@@ -169,7 +171,9 @@ export class MainThreadWebviews implements MainThreadWebviewsShape, WebviewReviv
 			}
 
 			return this._proxy.$deserializeWebviewPanel(handle, webview.state.viewType, webview.getTitle(), state, editorGroupToViewColumn(this._editorGroupService, webview.group), webview.options)
-				.then(undefined, () => {
+				.then(undefined, error => {
+					onUnexpectedError(error);
+
 					webview.html = MainThreadWebviews.getDeserializationFailedContents(viewType);
 				});
 		}));

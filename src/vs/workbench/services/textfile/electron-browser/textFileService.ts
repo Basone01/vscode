@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { TPromise } from 'vs/base/common/winjs.base';
 import * as paths from 'vs/base/common/paths';
 import * as strings from 'vs/base/common/strings';
 import { isWindows } from 'vs/base/common/platform';
@@ -27,8 +26,9 @@ import { IHistoryService } from 'vs/workbench/services/history/common/history';
 import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { IModelService } from 'vs/editor/common/services/modelService';
 import { INotificationService, Severity } from 'vs/platform/notification/common/notification';
-import { getConfirmMessage, IDialogService, ISaveDialogOptions, IFileDialogService } from 'vs/platform/dialogs/common/dialogs';
+import { getConfirmMessage, IDialogService, ISaveDialogOptions, IFileDialogService, IConfirmation } from 'vs/platform/dialogs/common/dialogs';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { coalesce } from 'vs/base/common/arrays';
 
 export class TextFileService extends AbstractTextFileService {
 
@@ -39,7 +39,7 @@ export class TextFileService extends AbstractTextFileService {
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IConfigurationService configurationService: IConfigurationService,
-		@IModeService private modeService: IModeService,
+		@IModeService private readonly modeService: IModeService,
 		@IModelService modelService: IModelService,
 		@IWindowService windowService: IWindowService,
 		@IEnvironmentService environmentService: IEnvironmentService,
@@ -48,14 +48,14 @@ export class TextFileService extends AbstractTextFileService {
 		@IWindowsService windowsService: IWindowsService,
 		@IHistoryService historyService: IHistoryService,
 		@IContextKeyService contextKeyService: IContextKeyService,
-		@IDialogService private dialogService: IDialogService,
-		@IFileDialogService private fileDialogService: IFileDialogService,
-		@IEditorService private editorService: IEditorService
+		@IDialogService private readonly dialogService: IDialogService,
+		@IFileDialogService private readonly fileDialogService: IFileDialogService,
+		@IEditorService private readonly editorService: IEditorService
 	) {
 		super(lifecycleService, contextService, configurationService, fileService, untitledEditorService, instantiationService, notificationService, environmentService, backupFileService, windowsService, windowService, historyService, contextKeyService, modelService);
 	}
 
-	resolveTextContent(resource: URI, options?: IResolveContentOptions): TPromise<IRawTextContent> {
+	resolveTextContent(resource: URI, options?: IResolveContentOptions): Promise<IRawTextContent> {
 		return this.fileService.resolveStreamContent(resource, options).then(streamContent => {
 			return createTextBufferFactoryFromStream(streamContent.value).then(res => {
 				const r: IRawTextContent = {
@@ -72,14 +72,14 @@ export class TextFileService extends AbstractTextFileService {
 		});
 	}
 
-	confirmSave(resources?: URI[]): TPromise<ConfirmResult> {
+	confirmSave(resources?: URI[]): Promise<ConfirmResult> {
 		if (this.environmentService.isExtensionDevelopment) {
-			return TPromise.wrap(ConfirmResult.DONT_SAVE); // no veto when we are in extension dev mode because we cannot assum we run interactive (e.g. tests)
+			return Promise.resolve(ConfirmResult.DONT_SAVE); // no veto when we are in extension dev mode because we cannot assum we run interactive (e.g. tests)
 		}
 
 		const resourcesToConfirm = this.getDirty(resources);
 		if (resourcesToConfirm.length === 0) {
-			return TPromise.wrap(ConfirmResult.DONT_SAVE);
+			return Promise.resolve(ConfirmResult.DONT_SAVE);
 		}
 
 		const message = resourcesToConfirm.length === 1 ? nls.localize('saveChangesMessage', "Do you want to save the changes you made to {0}?", paths.basename(resourcesToConfirm[0].fsPath))
@@ -103,7 +103,18 @@ export class TextFileService extends AbstractTextFileService {
 		});
 	}
 
-	promptForPath(resource: URI, defaultUri: URI): TPromise<URI> {
+	confirmOverwrite(resource: URI): Promise<boolean> {
+		const confirm: IConfirmation = {
+			message: nls.localize('confirmOverwrite', "'{0}' already exists. Do you want to replace it?", paths.basename(resource.fsPath)),
+			detail: nls.localize('irreversible', "A file or folder with the same name already exists in the folder {0}. Replacing it will overwrite its current contents.", paths.basename(paths.dirname(resource.fsPath))),
+			primaryButton: nls.localize({ key: 'replaceButtonLabel', comment: ['&& denotes a mnemonic'] }, "&&Replace"),
+			type: 'warning'
+		};
+
+		return this.dialogService.confirm(confirm).then(result => result.confirmed);
+	}
+
+	promptForPath(resource: URI, defaultUri: URI): Promise<URI> {
 
 		// Help user to find a name for the file by opening it first
 		return this.editorService.openEditor({ resource, options: { revealIfOpened: true, preserveFocus: true, } }).then(() => {
@@ -125,9 +136,9 @@ export class TextFileService extends AbstractTextFileService {
 		interface IFilter { name: string; extensions: string[]; }
 
 		// Build the file filter by using our known languages
-		const ext: string = defaultUri ? paths.extname(defaultUri.path) : void 0;
+		const ext: string = defaultUri ? paths.extname(defaultUri.path) : undefined;
 		let matchingFilter: IFilter;
-		const filters: IFilter[] = this.modeService.getRegisteredLanguageNames().map(languageName => {
+		const filters: IFilter[] = coalesce(this.modeService.getRegisteredLanguageNames().map(languageName => {
 			const extensions = this.modeService.getExtensions(languageName);
 			if (!extensions || !extensions.length) {
 				return null;
@@ -142,7 +153,7 @@ export class TextFileService extends AbstractTextFileService {
 			}
 
 			return filter;
-		}).filter(f => !!f);
+		}));
 
 		// Filters are a bit weird on Windows, based on having a match or not:
 		// Match: we put the matching filter first so that it shows up selected and the all files last

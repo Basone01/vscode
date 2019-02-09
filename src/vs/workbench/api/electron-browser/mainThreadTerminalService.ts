@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
-import { ITerminalService, ITerminalInstance, IShellLaunchConfig, ITerminalProcessExtHostProxy, ITerminalProcessExtHostRequest, ITerminalDimensions, EXT_HOST_CREATION_DELAY } from 'vs/workbench/parts/terminal/common/terminal';
+import { ITerminalService, ITerminalInstance, IShellLaunchConfig, ITerminalProcessExtHostProxy, ITerminalProcessExtHostRequest, ITerminalDimensions, EXT_HOST_CREATION_DELAY } from 'vs/workbench/contrib/terminal/common/terminal';
 import { ExtHostContext, ExtHostTerminalServiceShape, MainThreadTerminalServiceShape, MainContext, IExtHostContext, ShellLaunchConfigDto } from 'vs/workbench/api/node/extHost.protocol';
 import { extHostNamedCustomer } from 'vs/workbench/api/electron-browser/extHostCustomers';
 
@@ -20,7 +20,7 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 
 	constructor(
 		extHostContext: IExtHostContext,
-		@ITerminalService private terminalService: ITerminalService
+		@ITerminalService private readonly terminalService: ITerminalService
 	) {
 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostTerminalService);
 		this._remoteAuthority = extHostContext.remoteAuthority;
@@ -28,7 +28,10 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 			// Delay this message so the TerminalInstance constructor has a chance to finish and
 			// return the ID normally to the extension host. The ID that is passed here will be used
 			// to register non-extension API terminals in the extension host.
-			setTimeout(() => this._onTerminalOpened(instance), EXT_HOST_CREATION_DELAY);
+			setTimeout(() => {
+				this._onTerminalOpened(instance);
+				this._onInstanceDimensionsChanged(instance);
+			}, EXT_HOST_CREATION_DELAY);
 		}));
 		this._toDispose.push(terminalService.onInstanceDisposed(instance => this._onTerminalDisposed(instance)));
 		this._toDispose.push(terminalService.onInstanceProcessIdReady(instance => this._onTerminalProcessIdReady(instance)));
@@ -55,7 +58,7 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 		// when the extension host process goes down ?
 	}
 
-	public $createTerminal(name?: string, shellPath?: string, shellArgs?: string[], cwd?: string, env?: { [key: string]: string }, waitOnExit?: boolean): Thenable<number> {
+	public $createTerminal(name?: string, shellPath?: string, shellArgs?: string[], cwd?: string, env?: { [key: string]: string }, waitOnExit?: boolean, strictEnv?: boolean): Promise<{ id: number, name: string }> {
 		const shellLaunchConfig: IShellLaunchConfig = {
 			name,
 			executable: shellPath,
@@ -63,12 +66,17 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 			cwd,
 			waitOnExit,
 			ignoreConfigurationCwd: true,
-			env
+			env,
+			strictEnv
 		};
-		return Promise.resolve(this.terminalService.createTerminal(shellLaunchConfig).id);
+		const terminal = this.terminalService.createTerminal(shellLaunchConfig);
+		return Promise.resolve({
+			id: terminal.id,
+			name: terminal.title
+		});
 	}
 
-	public $createTerminalRenderer(name: string): Thenable<number> {
+	public $createTerminalRenderer(name: string): Promise<number> {
 		const instance = this.terminalService.createTerminalRenderer(name);
 		return Promise.resolve(instance.id);
 	}
@@ -191,11 +199,7 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 	}
 
 	private _onInstanceDimensionsChanged(instance: ITerminalInstance): void {
-		// Only send the dimensions if the terminal is a renderer only as there is no API to access
-		// dimensions on a plain Terminal.
-		if (instance.shellLaunchConfig.isRendererOnly) {
-			this._proxy.$acceptTerminalRendererDimensions(instance.id, instance.cols, instance.rows);
-		}
+		this._proxy.$acceptTerminalDimensions(instance.id, instance.cols, instance.rows);
 	}
 
 	private _onTerminalRequestExtHostProcess(request: ITerminalProcessExtHostRequest): void {
@@ -216,6 +220,8 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 		request.proxy.onInput(data => this._proxy.$acceptProcessInput(request.proxy.terminalId, data));
 		request.proxy.onResize(dimensions => this._proxy.$acceptProcessResize(request.proxy.terminalId, dimensions.cols, dimensions.rows));
 		request.proxy.onShutdown(immediate => this._proxy.$acceptProcessShutdown(request.proxy.terminalId, immediate));
+		request.proxy.onRequestCwd(() => this._proxy.$acceptProcessRequestCwd(request.proxy.terminalId));
+		request.proxy.onRequestInitialCwd(() => this._proxy.$acceptProcessRequestInitialCwd(request.proxy.terminalId));
 	}
 
 	public $sendProcessTitle(terminalId: number, title: string): void {
@@ -233,5 +239,13 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 	public $sendProcessExit(terminalId: number, exitCode: number): void {
 		this._terminalProcesses[terminalId].emitExit(exitCode);
 		delete this._terminalProcesses[terminalId];
+	}
+
+	public $sendProcessInitialCwd(terminalId: number, initialCwd: string): void {
+		this._terminalProcesses[terminalId].emitInitialCwd(initialCwd);
+	}
+
+	public $sendProcessCwd(terminalId: number, cwd: string): void {
+		this._terminalProcesses[terminalId].emitCwd(cwd);
 	}
 }
