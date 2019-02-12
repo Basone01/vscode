@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as extpath from 'vs/base/common/paths';
-import * as paths from 'vs/base/common/paths.node';
+import * as extpath from 'vs/base/common/extpath';
+import * as paths from 'vs/base/common/path';
 import { URI } from 'vs/base/common/uri';
 import { equalsIgnoreCase } from 'vs/base/common/strings';
 import { Schemas } from 'vs/base/common/network';
