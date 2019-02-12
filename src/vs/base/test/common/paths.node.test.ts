@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// extracted from nodejs commit 'https://github.com/nodejs/node/tree/43dd49c9782848c25e5b03448c8a0f923f13c158'
+
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -223,6 +225,36 @@ suite('Paths (Node Implementation)', () => {
 		assert.strictEqual(path.win32.dirname('/'), '/');
 		assert.strictEqual(path.win32.dirname('////'), '/');
 		assert.strictEqual(path.win32.dirname('foo'), '.');
+
+		// Tests from VSCode
+
+		function assertDirname(p: string, expected: string, win = false) {
+			const actual = win ? path.win32.dirname(p) : path.posix.dirname(p);
+
+			if (actual !== expected) {
+				assert.fail(`${p}: expected: ${expected}, ours: ${actual}`);
+			}
+		}
+
+		assertDirname('foo/bar', 'foo');
+		assertDirname('foo\\bar', 'foo', true);
+		assertDirname('/foo/bar', '/foo');
+		assertDirname('\\foo\\bar', '\\foo', true);
+		assertDirname('/foo', '/');
+		assertDirname('\\foo', '\\', true);
+		assertDirname('/', '/');
+		assertDirname('\\', '\\', true);
+		assertDirname('foo', '.');
+		assertDirname('f', '.');
+		assertDirname('f/', '.');
+		assertDirname('/folder/', '/');
+		assertDirname('c:\\some\\file.txt', 'c:\\some', true);
+		assertDirname('c:\\some', 'c:\\', true);
+		assertDirname('c:\\', 'c:\\', true);
+		assertDirname('c:', 'c:', true);
+		assertDirname('\\\\server\\share\\some\\path', '\\\\server\\share\\some', true);
+		assertDirname('\\\\server\\share\\some', '\\\\server\\share\\', true);
+		assertDirname('\\\\server\\share\\', '\\\\server\\share\\', true);
 	});
 
 	test('extname', () => {
@@ -322,6 +354,13 @@ suite('Paths (Node Implementation)', () => {
 		assert.strictEqual(path.posix.extname('file\\\\'), '');
 		assert.strictEqual(path.posix.extname('file.\\'), '.\\');
 		assert.strictEqual(path.posix.extname('file.\\\\'), '.\\\\');
+
+		// Tests from VSCode
+		assert.equal(path.extname('far.boo'), '.boo');
+		assert.equal(path.extname('far.b'), '.b');
+		assert.equal(path.extname('far.'), '.');
+		assert.equal(path.extname('far.boo/boo.far'), '.far');
+		assert.equal(path.extname('far.boo/boo'), '');
 	});
 
 	test('resolve', () => {
@@ -464,6 +503,27 @@ suite('Paths (Node Implementation)', () => {
 		const controlCharFilename = `Icon${String.fromCharCode(13)}`;
 		assert.strictEqual(path.posix.basename(`/a/b/${controlCharFilename}`),
 			controlCharFilename);
+
+		// Tests from VSCode
+		assert.equal(path.basename('foo/bar'), 'bar');
+		assert.equal(path.posix.basename('foo\\bar'), 'foo\\bar');
+		assert.equal(path.win32.basename('foo\\bar'), 'bar');
+		assert.equal(path.basename('/foo/bar'), 'bar');
+		assert.equal(path.posix.basename('\\foo\\bar'), '\\foo\\bar');
+		assert.equal(path.win32.basename('\\foo\\bar'), 'bar');
+		assert.equal(path.basename('./bar'), 'bar');
+		assert.equal(path.posix.basename('.\\bar'), '.\\bar');
+		assert.equal(path.win32.basename('.\\bar'), 'bar');
+		assert.equal(path.basename('/bar'), 'bar');
+		assert.equal(path.posix.basename('\\bar'), '\\bar');
+		assert.equal(path.win32.basename('\\bar'), 'bar');
+		assert.equal(path.basename('bar/'), 'bar');
+		assert.equal(path.posix.basename('bar\\'), 'bar\\');
+		assert.equal(path.win32.basename('bar\\'), 'bar');
+		assert.equal(path.basename('bar'), 'bar');
+		assert.equal(path.basename('////////'), '');
+		assert.equal(path.posix.basename('\\\\\\\\'), '\\\\\\\\');
+		assert.equal(path.win32.basename('\\\\\\\\'), '');
 	});
 
 	test('relative', () => {
@@ -629,7 +689,7 @@ suite('Paths (Node Implementation)', () => {
 		assert.strictEqual(path.posix.isAbsolute('bar/'), false);
 		assert.strictEqual(path.posix.isAbsolute('./baz'), false);
 
-		// Tests from us:
+		// Tests from VSCode:
 
 		// Absolute Paths
 		[
@@ -698,4 +758,66 @@ suite('Paths (Node Implementation)', () => {
 			assert.strictEqual(path, path.posix);
 		}
 	});
+
+	// test('perf', () => {
+	// 	const folderNames = [
+	// 		'abc',
+	// 		'Users',
+	// 		'reallylongfoldername',
+	// 		's',
+	// 		'reallyreallyreallylongfoldername',
+	// 		'home'
+	// 	];
+
+	// 	const basePaths = [
+	// 		'C:',
+	// 		'',
+	// 	];
+
+	// 	const separators = [
+	// 		'\\',
+	// 		'/'
+	// 	];
+
+	// 	function randomInt(ciel: number): number {
+	// 		return Math.floor(Math.random() * ciel);
+	// 	}
+
+	// 	let pathsToNormalize = [];
+	// 	let pathsToJoin = [];
+	// 	let i;
+	// 	for (i = 0; i < 1000000; i++) {
+	// 		const basePath = basePaths[randomInt(basePaths.length)];
+	// 		let lengthOfPath = randomInt(10) + 2;
+
+	// 		let pathToNormalize = basePath + separators[randomInt(separators.length)];
+	// 		while (lengthOfPath-- > 0) {
+	// 			pathToNormalize = pathToNormalize + folderNames[randomInt(folderNames.length)] + separators[randomInt(separators.length)];
+	// 		}
+
+	// 		pathsToNormalize.push(pathToNormalize);
+
+	// 		let pathToJoin = '';
+	// 		lengthOfPath = randomInt(10) + 2;
+	// 		while (lengthOfPath-- > 0) {
+	// 			pathToJoin = pathToJoin + folderNames[randomInt(folderNames.length)] + separators[randomInt(separators.length)];
+	// 		}
+
+	// 		pathsToJoin.push(pathToJoin + '.ts');
+	// 	}
+
+	// 	let newTime = 0;
+
+	// 	let j;
+	// 	for(j = 0; j < pathsToJoin.length; j++) {
+	// 		const path1 = pathsToNormalize[j];
+	// 		const path2 = pathsToNormalize[j];
+
+	// 		const newStart = performance.now();
+	// 		path.join(path1, path2);
+	// 		newTime += performance.now() - newStart;
+	// 	}
+
+	// 	assert.ok(false, `Time: ${newTime}ms.`);
+	// });
 });
