@@ -391,17 +391,21 @@ export function prepareCommand(args: DebugProtocol.RunInTerminalRequestArguments
 				return (s.indexOf(' ') >= 0 || s.indexOf('\\') >= 0) ? `"${s}"` : s;
 			};
 
+			const hardQuote = (s: string) => {
+				return /[^\w@%\/+=,.:^-]/.test(s) ? `'${s.replace(/'/g, '\'\\\'\'')}'` : s;
+			};
+
 			if (args.cwd) {
-				command += `cd ${quote(args.cwd)} ; `;
+				command += `cd ${quote(args.cwd)} && `;
 			}
 			if (args.env) {
 				command += 'env';
 				for (let key in args.env) {
 					const value = args.env[key];
 					if (value === null) {
-						command += ` -u "${key}"`;
+						command += ` -u ${hardQuote(key)}`;
 					} else {
-						command += ` "${key}=${value}"`;
+						command += ` ${hardQuote(`${key}=${value}`)}`;
 					}
 				}
 				command += ' ';
