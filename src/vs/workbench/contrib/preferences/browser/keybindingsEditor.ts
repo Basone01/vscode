@@ -129,7 +129,7 @@ export class KeybindingsEditor extends BaseEditor implements IKeybindingsEditor 
 	setInput(input: KeybindingsEditorInput, options: EditorOptions, token: CancellationToken): Promise<void> {
 		this.keybindingsEditorContextKey.set(true);
 		return super.setInput(input, options, token)
-			.then(() => this.render(options && options.preserveFocus, token));
+			.then(() => this.render(!!(options && options.preserveFocus), token));
 	}
 
 	clearInput(): void {
@@ -913,7 +913,7 @@ class CommandColumn extends Column {
 		const commandDefaultLabelMatched = !!keybindingItemEntry.commandDefaultLabelMatches;
 		DOM.toggleClass(this.commandColumn, 'vertical-align-column', commandIdMatched || commandDefaultLabelMatched);
 		this.commandColumn.setAttribute('aria-label', this.getAriaLabel(keybindingItemEntry));
-		let commandLabel: HighlightedLabel;
+		let commandLabel: HighlightedLabel | undefined;
 		if (keybindingItem.commandLabel) {
 			commandLabel = new HighlightedLabel(this.commandColumn, false);
 			commandLabel.set(keybindingItem.commandLabel, keybindingItemEntry.commandLabelMatches);
