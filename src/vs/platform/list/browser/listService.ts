@@ -101,6 +101,7 @@ export const WorkbenchListMultiSelection = new RawContextKey<boolean>('listMulti
 export const WorkbenchListSupportsKeyboardNavigation = new RawContextKey<boolean>('listSupportsKeyboardNavigation', true);
 export const WorkbenchListAutomaticKeyboardNavigationKey = 'listAutomaticKeyboardNavigation';
 export const WorkbenchListAutomaticKeyboardNavigation = new RawContextKey<boolean>(WorkbenchListAutomaticKeyboardNavigationKey, true);
+export let didBindWorkbenchListAutomaticKeyboardNavigation = false;
 
 function createScopedContextKeyService(contextKeyService: IContextKeyService, widget: ListWidget): IContextKeyService {
 	const result = contextKeyService.createScoped(widget.getHTMLElement());
@@ -112,6 +113,7 @@ export const multiSelectModifierSettingKey = 'workbench.list.multiSelectModifier
 export const openModeSettingKey = 'workbench.list.openMode';
 export const horizontalScrollingKey = 'workbench.tree.horizontalScrolling';
 export const keyboardNavigationSettingKey = 'workbench.list.keyboardNavigation';
+export const automaticKeyboardNavigationSettingKey = 'workbench.list.automaticKeyboardNavigation';
 const treeIndentKey = 'workbench.tree.indent';
 
 function useAltAsMultipleSelectionModifier(configurationService: IConfigurationService): boolean {
@@ -778,9 +780,23 @@ export class WorkbenchObjectTree<T extends NonNullable<any>, TFilterData = void>
 		@IKeybindingService keybindingService: IKeybindingService
 	) {
 		WorkbenchListSupportsKeyboardNavigation.bindTo(contextKeyService);
-		WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
 
-		const automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+		if (!didBindWorkbenchListAutomaticKeyboardNavigation) {
+			WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
+			didBindWorkbenchListAutomaticKeyboardNavigation = true;
+		}
+
+		const getAutomaticKeyboardNavigation = () => {
+			// give priority to the context key value to disable this completely
+			let automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+
+			if (automaticKeyboardNavigation) {
+				automaticKeyboardNavigation = configurationService.getValue<boolean>(automaticKeyboardNavigationSettingKey);
+			}
+
+			return automaticKeyboardNavigation;
+		};
+
 		const keyboardNavigation = configurationService.getValue<string>(keyboardNavigationSettingKey);
 		const horizontalScrolling = typeof options.horizontalScrolling !== 'undefined' ? options.horizontalScrolling : configurationService.getValue<boolean>(horizontalScrollingKey);
 		const openOnSingleClick = useSingleClickToOpen(configurationService);
@@ -792,7 +808,7 @@ export class WorkbenchObjectTree<T extends NonNullable<any>, TFilterData = void>
 			...computeStyles(themeService.getTheme(), defaultListStyles),
 			...workbenchListOptions,
 			indent: configurationService.getValue(treeIndentKey),
-			automaticKeyboardNavigation,
+			automaticKeyboardNavigation: getAutomaticKeyboardNavigation(),
 			simpleKeyboardNavigation: keyboardNavigation === 'simple',
 			filterOnType: keyboardNavigation === 'filter',
 			horizontalScrolling,
@@ -852,13 +868,13 @@ export class WorkbenchObjectTree<T extends NonNullable<any>, TFilterData = void>
 						filterOnType: keyboardNavigation === 'filter'
 					});
 				}
+				if (e.affectsConfiguration(automaticKeyboardNavigationSettingKey)) {
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
+				}
 			}),
 			this.contextKeyService.onDidChangeContext(e => {
 				if (e.affectsSome(interestingContextKeys)) {
-					const automaticKeyboardNavigation = this.contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
-					this.updateOptions({
-						automaticKeyboardNavigation
-					});
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
 				}
 			})
 		);
@@ -897,9 +913,23 @@ export class WorkbenchDataTree<TInput, T, TFilterData = void> extends DataTree<T
 		@IKeybindingService keybindingService: IKeybindingService
 	) {
 		WorkbenchListSupportsKeyboardNavigation.bindTo(contextKeyService);
-		WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
 
-		const automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+		if (!didBindWorkbenchListAutomaticKeyboardNavigation) {
+			WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
+			didBindWorkbenchListAutomaticKeyboardNavigation = true;
+		}
+
+		const getAutomaticKeyboardNavigation = () => {
+			// give priority to the context key value to disable this completely
+			let automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+
+			if (automaticKeyboardNavigation) {
+				automaticKeyboardNavigation = configurationService.getValue<boolean>(automaticKeyboardNavigationSettingKey);
+			}
+
+			return automaticKeyboardNavigation;
+		};
+
 		const keyboardNavigation = configurationService.getValue<string>(keyboardNavigationSettingKey);
 		const horizontalScrolling = typeof options.horizontalScrolling !== 'undefined' ? options.horizontalScrolling : configurationService.getValue<boolean>(horizontalScrollingKey);
 		const openOnSingleClick = useSingleClickToOpen(configurationService);
@@ -911,7 +941,7 @@ export class WorkbenchDataTree<TInput, T, TFilterData = void> extends DataTree<T
 			...computeStyles(themeService.getTheme(), defaultListStyles),
 			...workbenchListOptions,
 			indent: configurationService.getValue(treeIndentKey),
-			automaticKeyboardNavigation,
+			automaticKeyboardNavigation: getAutomaticKeyboardNavigation(),
 			simpleKeyboardNavigation: keyboardNavigation === 'simple',
 			filterOnType: keyboardNavigation === 'filter',
 			horizontalScrolling,
@@ -971,13 +1001,13 @@ export class WorkbenchDataTree<TInput, T, TFilterData = void> extends DataTree<T
 						filterOnType: keyboardNavigation === 'filter'
 					});
 				}
+				if (e.affectsConfiguration(automaticKeyboardNavigationSettingKey)) {
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
+				}
 			}),
 			this.contextKeyService.onDidChangeContext(e => {
 				if (e.affectsSome(interestingContextKeys)) {
-					const automaticKeyboardNavigation = this.contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
-					this.updateOptions({
-						automaticKeyboardNavigation
-					});
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
 				}
 			})
 		);
@@ -1011,9 +1041,23 @@ export class WorkbenchAsyncDataTree<TInput, T, TFilterData = void> extends Async
 		@IKeybindingService keybindingService: IKeybindingService
 	) {
 		WorkbenchListSupportsKeyboardNavigation.bindTo(contextKeyService);
-		WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
 
-		const automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+		if (!didBindWorkbenchListAutomaticKeyboardNavigation) {
+			WorkbenchListAutomaticKeyboardNavigation.bindTo(contextKeyService);
+			didBindWorkbenchListAutomaticKeyboardNavigation = true;
+		}
+
+		const getAutomaticKeyboardNavigation = () => {
+			// give priority to the context key value to disable this completely
+			let automaticKeyboardNavigation = contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
+
+			if (automaticKeyboardNavigation) {
+				automaticKeyboardNavigation = configurationService.getValue<boolean>(automaticKeyboardNavigationSettingKey);
+			}
+
+			return automaticKeyboardNavigation;
+		};
+
 		const keyboardNavigation = configurationService.getValue<string>(keyboardNavigationSettingKey);
 		const horizontalScrolling = typeof options.horizontalScrolling !== 'undefined' ? options.horizontalScrolling : configurationService.getValue<boolean>(horizontalScrollingKey);
 		const openOnSingleClick = useSingleClickToOpen(configurationService);
@@ -1025,7 +1069,7 @@ export class WorkbenchAsyncDataTree<TInput, T, TFilterData = void> extends Async
 			...computeStyles(themeService.getTheme(), defaultListStyles),
 			...workbenchListOptions,
 			indent: configurationService.getValue<number>(treeIndentKey),
-			automaticKeyboardNavigation,
+			automaticKeyboardNavigation: getAutomaticKeyboardNavigation(),
 			simpleKeyboardNavigation: keyboardNavigation === 'simple',
 			filterOnType: keyboardNavigation === 'filter',
 			horizontalScrolling,
@@ -1085,13 +1129,13 @@ export class WorkbenchAsyncDataTree<TInput, T, TFilterData = void> extends Async
 						filterOnType: keyboardNavigation === 'filter'
 					});
 				}
+				if (e.affectsConfiguration(automaticKeyboardNavigationSettingKey)) {
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
+				}
 			}),
 			this.contextKeyService.onDidChangeContext(e => {
 				if (e.affectsSome(interestingContextKeys)) {
-					const automaticKeyboardNavigation = this.contextKeyService.getContextKeyValue<boolean>(WorkbenchListAutomaticKeyboardNavigationKey);
-					this.updateOptions({
-						automaticKeyboardNavigation
-					});
+					this.updateOptions({ automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
 				}
 			})
 		);
@@ -1158,5 +1202,10 @@ configurationRegistry.registerConfiguration({
 			'default': 'highlight',
 			'description': localize('keyboardNavigationSettingKey', "Controls the keyboard navigation style for lists and trees in the workbench. Can be simple, highlight and filter.")
 		},
+		[automaticKeyboardNavigationSettingKey]: {
+			'type': 'boolean',
+			'default': true,
+			'description': localize('automatic keyboard navigation setting', "Controls whether keyboard navigation in lists and trees is automatically triggered simply by typing. If set to `false`, keyboard navigation is only triggered when executing the `list.toggleKeyboardNavigation` command, for which you can assign a keyboard shortcut.")
+		}
 	}
 });
