@@ -2,4 +2,4 @@ version: "1"
 rules:
   - base: master
     upstream: Microsoft:master
-    mergeMethod: merge
+    mergeMethod: none
