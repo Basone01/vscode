@@ -17,8 +17,8 @@ import { OverviewRulerLane } from 'vs/editor/common/model';
 import * as languageConfiguration from 'vs/editor/common/modes/languageConfiguration';
 import { score } from 'vs/editor/common/modes/languageSelector';
 import * as files from 'vs/platform/files/common/files';
-import pkg from 'vs/platform/node/package';
-import product from 'vs/platform/node/product';
+import pkg from 'vs/platform/product/node/package';
+import product from 'vs/platform/product/node/product';
 import { ExtHostContext, IInitData, IMainContext, MainContext } from 'vs/workbench/api/node/extHost.protocol';
 import { ExtHostApiCommands } from 'vs/workbench/api/node/extHostApiCommands';
 import { ExtHostClipboard } from 'vs/workbench/api/node/extHostClipboard';
@@ -647,6 +647,9 @@ export function createApiFactory(
 			}),
 			registerRemoteAuthorityResolver: proposedApiFunction(extension, (authorityPrefix: string, resolver: vscode.RemoteAuthorityResolver) => {
 				return extensionService.registerRemoteAuthorityResolver(authorityPrefix, resolver);
+			}),
+			registerResourceLabelFormatter: proposedApiFunction(extension, (formatter: vscode.ResourceLabelFormatter) => {
+				return extHostFileSystem.registerResourceLabelFormatter(formatter);
 			}),
 			onDidRenameFile: proposedApiFunction(extension, (listener, thisArg?, disposables?) => {
 				return extHostFileSystemEvent.onDidRenameFile(listener, thisArg, disposables);
