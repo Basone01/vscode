@@ -317,11 +317,6 @@ declare module 'vscode' {
 	}
 
 	/**
-	 * Options that apply to requesting the file index.
-	 */
-	export interface FileIndexOptions extends SearchOptions { }
-
-	/**
 	 * A preview of the text result.
 	 */
 	export interface TextSearchMatchPreview {
@@ -381,26 +376,6 @@ declare module 'vscode' {
 	export type TextSearchResult = TextSearchMatch | TextSearchContext;
 
 	/**
-	 * A FileIndexProvider provides a list of files in the given folder. VS Code will filter that list for searching with quickopen or from other extensions.
-	 *
-	 * A FileIndexProvider is the simpler of two ways to implement file search in VS Code. Use a FileIndexProvider if you are able to provide a listing of all files
-	 * in a folder, and want VS Code to filter them according to the user's search query.
-	 *
-	 * The FileIndexProvider will be invoked once when quickopen is opened, and VS Code will filter the returned list. It will also be invoked when
-	 * `workspace.findFiles` is called.
-	 *
-	 * If a [`FileSearchProvider`](#FileSearchProvider) is registered for the scheme, that provider will be used instead.
-	 */
-	export interface FileIndexProvider {
-		/**
-		 * Provide the set of files in the folder.
-		 * @param options A set of options to consider while searching.
-		 * @param token A cancellation token.
-		 */
-		provideFileIndex(options: FileIndexOptions, token: CancellationToken): ProviderResult<Uri[]>;
-	}
-
-	/**
 	 * A FileSearchProvider provides search results for files in the given folder that match a query string. It can be invoked by quickopen or other extensions.
 	 *
 	 * A FileSearchProvider is the more powerful of two ways to implement file search in VS Code. Use a FileSearchProvider if you wish to search within a folder for
@@ -408,8 +383,6 @@ declare module 'vscode' {
 	 *
 	 * The FileSearchProvider will be invoked on every keypress in quickopen. When `workspace.findFiles` is called, it will be invoked with an empty query string,
 	 * and in that case, every file in the folder should be returned.
-	 *
-	 * @see [FileIndexProvider](#FileIndexProvider)
 	 */
 	export interface FileSearchProvider {
 		/**
@@ -504,17 +477,6 @@ declare module 'vscode' {
 		 * DEPRECATED
 		 */
 		export function registerSearchProvider(): Disposable;
-
-		/**
-		 * Register a file index provider.
-		 *
-		 * Only one provider can be registered per scheme.
-		 *
-		 * @param scheme The provider will be invoked for workspace folders that have this file scheme.
-		 * @param provider The provider.
-		 * @return A [disposable](#Disposable) that unregisters this provider when being disposed.
-		 */
-		export function registerFileIndexProvider(scheme: string, provider: FileIndexProvider): Disposable;
 
 		/**
 		 * Register a search provider.
@@ -801,14 +763,21 @@ declare module 'vscode' {
 		range: Range;
 
 		/**
+		 * Label describing the [Comment Thread](#CommentThread)
+		 */
+		label?: string;
+
+		/**
 		 * The ordered comments of the thread.
 		 */
 		comments: Comment[];
+		acceptInputCommands?: Command[];
 
 		/**
 		 * Whether the thread should be collapsed or expanded when opening the document. Defaults to Collapsed.
 		 */
 		collapsibleState?: CommentThreadCollapsibleState;
+		dispose?(): void;
 	}
 
 	/**
@@ -824,6 +793,11 @@ declare module 'vscode' {
 		 * The text of the comment
 		 */
 		body: MarkdownString;
+
+		/**
+		 * Label describing the [Comment](#Comment)
+		 */
+		label?: string;
 
 		/**
 		 * The display name of the user who created the comment
@@ -846,6 +820,8 @@ declare module 'vscode' {
 		 *
 		 * This will be treated as false if the comment is provided by a `WorkspaceCommentProvider`, or
 		 * if it is provided by a `DocumentCommentProvider` and  no `editComment` method is given.
+		 *
+		 * DEPRECATED, use editCommand
 		 */
 		canEdit?: boolean;
 
@@ -854,6 +830,8 @@ declare module 'vscode' {
 		 *
 		 * This will be treated as false if the comment is provided by a `WorkspaceCommentProvider`, or
 		 * if it is provided by a `DocumentCommentProvider` and  no `deleteComment` method is given.
+		 *
+		 * DEPRECATED, use deleteCommand
 		 */
 		canDelete?: boolean;
 
@@ -861,6 +839,9 @@ declare module 'vscode' {
 		 * The command to be executed if the comment is selected in the Comments Panel
 		 */
 		command?: Command;
+
+		editCommand?: Command;
+		deleteCommand?: Command;
 
 		isDraft?: boolean;
 		commentReactions?: CommentReaction[];
@@ -895,6 +876,9 @@ declare module 'vscode' {
 		readonly hasReacted?: boolean;
 	}
 
+	/**
+	 * DEPRECATED
+	 */
 	interface DocumentCommentProvider {
 		/**
 		 * Provide the commenting ranges and comment threads for the given document. The comments are displayed within the editor.
@@ -939,6 +923,9 @@ declare module 'vscode' {
 		onDidChangeCommentThreads: Event<CommentThreadChangedEvent>;
 	}
 
+	/**
+	 * DEPRECATED
+	 */
 	interface WorkspaceCommentProvider {
 		/**
 		 * Provide all comments for the workspace. Comments are shown within the comments panel. Selecting a comment
@@ -952,10 +939,52 @@ declare module 'vscode' {
 		onDidChangeCommentThreads: Event<CommentThreadChangedEvent>;
 	}
 
+	export interface CommentInputBox {
+
+		/**
+		 * Setter and getter for the contents of the input box.
+		 */
+		value: string;
+	}
+
+	export interface CommentController {
+		readonly id: string;
+		readonly label: string;
+		/**
+		 * The active (focused) comment input box.
+		 */
+		readonly inputBox?: CommentInputBox;
+		createCommentThread(id: string, resource: Uri, range: Range): CommentThread;
+		/**
+		 * Provide a list [ranges](#Range) which support commenting to any given resource uri.
+		 *
+		 * @param uri The uri of the resource open in a text editor.
+		 * @param callback, a handler called when users attempt to create a new comment thread, either from the gutter or command palette
+		 * @param token A cancellation token.
+		 * @return A thenable that resolves to a list of commenting ranges or null and undefined if the provider
+		 * does not want to participate or was cancelled.
+		 */
+		registerCommentingRangeProvider(provider: (document: TextDocument, token: CancellationToken) => ProviderResult<Range[]>, callback: (document: TextDocument, range: Range) => void): void;
+		dispose(): void;
+	}
+
+	namespace comment {
+		export function createCommentController(id: string, label: string): CommentController;
+	}
+
 	namespace workspace {
+		/**
+		 * DEPRECATED
+		 * Use vscode.comment.createCommentController instead.
+		 */
 		export function registerDocumentCommentProvider(provider: DocumentCommentProvider): Disposable;
+		/**
+		 * DEPRECATED
+		 * Use vscode.comment.createCommentController instead and we don't differentiate document comments and workspace comments anymore.
+		 */
 		export function registerWorkspaceCommentProvider(provider: WorkspaceCommentProvider): Disposable;
 	}
+
 	//#endregion
 
 	//#region Terminal

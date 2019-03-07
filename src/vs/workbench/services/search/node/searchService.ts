@@ -29,6 +29,7 @@ import { IUntitledEditorService } from 'vs/workbench/services/untitled/common/un
 import { IRawSearchService, ISerializedFileMatch, ISerializedSearchComplete, ISerializedSearchProgressItem, isSerializedSearchComplete, isSerializedSearchSuccess } from './search';
 import { SearchChannelClient } from './searchIpc';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 export class SearchService extends Disposable implements ISearchService {
 	_serviceBrand: any;
@@ -36,7 +37,6 @@ export class SearchService extends Disposable implements ISearchService {
 	private diskSearch: DiskSearch;
 	private readonly fileSearchProviders = new Map<string, ISearchResultProvider>();
 	private readonly textSearchProviders = new Map<string, ISearchResultProvider>();
-	private readonly fileIndexProviders = new Map<string, ISearchResultProvider>();
 
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -58,8 +58,6 @@ export class SearchService extends Disposable implements ISearchService {
 			list = this.fileSearchProviders;
 		} else if (type === SearchProviderType.text) {
 			list = this.textSearchProviders;
-		} else if (type === SearchProviderType.fileIndex) {
-			list = this.fileIndexProviders;
 		} else {
 			throw new Error('Unknown SearchProviderType');
 		}
@@ -78,8 +76,6 @@ export class SearchService extends Disposable implements ISearchService {
 		if (onProgress) {
 			arrays.coalesce(localResults.values()).forEach(onProgress);
 		}
-
-		this.logService.trace('SearchService#search', JSON.stringify(query));
 
 		const onProviderProgress = progress => {
 			if (progress.resource) {
@@ -105,6 +101,8 @@ export class SearchService extends Disposable implements ISearchService {
 	}
 
 	private doSearch(query: ISearchQuery, token?: CancellationToken, onProgress?: (item: ISearchProgressItem) => void): Promise<ISearchComplete> {
+		this.logService.trace('SearchService#search', JSON.stringify(query));
+
 		const schemesInQuery = this.getSchemesInQuery(query);
 
 		const providerActivations: Promise<any>[] = [Promise.resolve(null)];
@@ -181,7 +179,7 @@ export class SearchService extends Disposable implements ISearchService {
 		keys(fqs).forEach(scheme => {
 			const schemeFQs = fqs.get(scheme);
 			const provider = query.type === QueryType.File ?
-				this.fileSearchProviders.get(scheme) || this.fileIndexProviders.get(scheme) :
+				this.fileSearchProviders.get(scheme) :
 				this.textSearchProviders.get(scheme);
 
 			if (!provider && scheme === 'file') {
@@ -420,7 +418,6 @@ export class SearchService extends Disposable implements ISearchService {
 	clearCache(cacheKey: string): Promise<void> {
 		const clearPs = [
 			this.diskSearch,
-			...values(this.fileIndexProviders),
 			...values(this.fileSearchProviders)
 		].map(provider => provider && provider.clearCache(cacheKey));
 
@@ -586,3 +583,5 @@ export class DiskSearch implements ISearchResultProvider {
 		return this.raw.clearCache(cacheKey);
 	}
 }
+
+registerSingleton(ISearchService, SearchService, true);

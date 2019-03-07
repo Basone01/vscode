@@ -9,7 +9,7 @@ import * as nls from 'vs/nls';
 import * as platform from 'vs/base/common/platform';
 import severity from 'vs/base/common/severity';
 import { Event, Emitter } from 'vs/base/common/event';
-import { CompletionItem, completionKindFromLegacyString } from 'vs/editor/common/modes';
+import { CompletionItem, completionKindFromString } from 'vs/editor/common/modes';
 import { Position } from 'vs/editor/common/core/position';
 import * as aria from 'vs/base/browser/ui/aria/aria';
 import { IDebugSession, IConfig, IThread, IRawModelUpdate, IDebugService, IRawStoppedDetails, State, LoadedSourceEvent, IFunctionBreakpoint, IExceptionBreakpoint, IBreakpoint, IExceptionInfo, AdapterEndEvent, IDebugger, VIEWLET_ID, IDebugConfiguration, IReplElement, IStackFrame, IExpression, IReplElementSource } from 'vs/workbench/contrib/debug/common/debug';
@@ -37,6 +37,7 @@ import { INotificationService } from 'vs/platform/notification/common/notificati
 export class DebugSession implements IDebugSession {
 	private id: string;
 	private raw: RawDebugSession;
+	private initialized = false;
 
 	private sources = new Map<string, Source>();
 	private threads = new Map<number, Thread>();
@@ -92,6 +93,9 @@ export class DebugSession implements IDebugSession {
 	}
 
 	get state(): State {
+		if (!this.initialized) {
+			return State.Initializing;
+		}
 		if (!this.raw) {
 			return State.Inactive;
 		}
@@ -168,6 +172,7 @@ export class DebugSession implements IDebugSession {
 						supportsRunInTerminalRequest: true, // #10574
 						locale: platform.locale
 					}).then(() => {
+						this.initialized = true;
 						this._onDidChangeState.fire();
 						this.model.setExceptionBreakpoints(this.raw.capabilities.exceptionBreakpointFilters);
 					});
@@ -484,7 +489,7 @@ export class DebugSession implements IDebugSession {
 							result.push({
 								label: item.label,
 								insertText: item.text || item.label,
-								kind: completionKindFromLegacyString(item.type),
+								kind: completionKindFromString(item.type),
 								filterText: item.start && item.length && text.substr(item.start, item.length).concat(item.label),
 								range: Range.fromPositions(position.delta(0, -(item.length || overwriteBefore)), position)
 							});
@@ -780,7 +785,7 @@ export class DebugSession implements IDebugSession {
 		return this.sources.get(this.getUriKey(uri));
 	}
 
-	getSource(raw: DebugProtocol.Source): Source {
+	getSource(raw?: DebugProtocol.Source): Source {
 		let source = new Source(raw, this.getId());
 		const uriKey = this.getUriKey(source.uri);
 		const found = this.sources.get(uriKey);

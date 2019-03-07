@@ -36,7 +36,7 @@ export function getPathLabel(resource: URI | string, userHomeProvider?: IUserHom
 			const hasMultipleRoots = rootProvider.getWorkspace().folders.length > 1;
 
 			let pathLabel: string;
-			if (isEqual(baseResource.uri, resource, !isLinux)) {
+			if (isEqual(baseResource.uri, resource)) {
 				pathLabel = ''; // no label if paths are identical
 			} else {
 				// TODO: isidor use resources.relative
@@ -283,7 +283,7 @@ interface ISegment {
  * @param value string to which templating is applied
  * @param values the values of the templates to use
  */
-export function template(template: string, values: { [key: string]: string | ISeparator } = Object.create(null)): string {
+export function template(template: string, values: { [key: string]: string | ISeparator | null } = Object.create(null)): string {
 	const segments: ISegment[] = [];
 
 	let inVariable = false;

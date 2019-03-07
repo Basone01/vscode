@@ -19,7 +19,6 @@ import { IModeService } from 'vs/editor/common/services/modeService';
 import { HoverStartMode } from 'vs/editor/contrib/hover/hoverOperation';
 import { ModesContentHoverWidget } from 'vs/editor/contrib/hover/modesContentHover';
 import { ModesGlyphHoverWidget } from 'vs/editor/contrib/hover/modesGlyphHover';
-import { MarkdownRenderer } from 'vs/editor/contrib/markdown/markdownRenderer';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { IOpenerService } from 'vs/platform/opener/common/opener';
 import { editorHoverBackground, editorHoverBorder, editorHoverHighlight, textCodeBlockBackground, textLinkForeground, editorHoverStatusBarBackground } from 'vs/platform/theme/common/colorRegistry';
@@ -36,7 +35,7 @@ export class ModesHoverController implements IEditorContribution {
 	private static readonly ID = 'editor.contrib.hover';
 
 	private _toUnhook: IDisposable[];
-	private _didChangeConfigurationHandler: IDisposable;
+	private readonly _didChangeConfigurationHandler: IDisposable;
 
 	private _contentWidget: ModesContentHoverWidget;
 	private _glyphWidget: ModesGlyphHoverWidget;
@@ -214,9 +213,8 @@ export class ModesHoverController implements IEditorContribution {
 	}
 
 	private _createHoverWidget() {
-		const renderer = new MarkdownRenderer(this._editor, this._modeService, this._openerService);
-		this._contentWidget = new ModesContentHoverWidget(this._editor, renderer, this._markerDecorationsService, this._themeService, this._keybindingService, this._contextMenuService, this._bulkEditService, this._commandService, this._openerService);
-		this._glyphWidget = new ModesGlyphHoverWidget(this._editor, renderer);
+		this._contentWidget = new ModesContentHoverWidget(this._editor, this._markerDecorationsService, this._themeService, this._keybindingService, this._contextMenuService, this._bulkEditService, this._commandService, this._modeService, this._openerService);
+		this._glyphWidget = new ModesGlyphHoverWidget(this._editor, this._modeService, this._openerService);
 	}
 
 	public showContentHover(range: Range, mode: HoverStartMode, focus: boolean): void {
@@ -297,13 +295,13 @@ registerThemingParticipant((theme, collector) => {
 		collector.addRule(`.monaco-editor .monaco-editor-hover hr { border-top: 1px solid ${hoverBorder.transparent(0.5)}; }`);
 		collector.addRule(`.monaco-editor .monaco-editor-hover hr { border-bottom: 0px solid ${hoverBorder.transparent(0.5)}; }`);
 	}
-	const actionsBackground = theme.getColor(editorHoverStatusBarBackground);
-	if (actionsBackground) {
-		collector.addRule(`.monaco-editor .monaco-editor-hover .hover-row .actions { background-color: ${actionsBackground}; }`);
-	}
 	const link = theme.getColor(textLinkForeground);
 	if (link) {
 		collector.addRule(`.monaco-editor .monaco-editor-hover a { color: ${link}; }`);
+	}
+	const actionsBackground = theme.getColor(editorHoverStatusBarBackground);
+	if (actionsBackground) {
+		collector.addRule(`.monaco-editor .monaco-editor-hover .hover-row .actions { background-color: ${actionsBackground}; }`);
 	}
 	const codeBackground = theme.getColor(textCodeBlockBackground);
 	if (codeBackground) {

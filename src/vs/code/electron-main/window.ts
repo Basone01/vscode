@@ -69,14 +69,14 @@ export class CodeWindow extends Disposable implements ICodeWindow {
 	private currentMenuBarVisibility: MenuBarVisibility;
 	private representedFilename: string;
 
-	private whenReadyCallbacks: { (window: ICodeWindow): void }[];
+	private readonly whenReadyCallbacks: { (window: ICodeWindow): void }[];
 
 	private currentConfig: IWindowConfiguration;
 	private pendingLoadConfig?: IWindowConfiguration;
 
 	private marketplaceHeadersPromise: Promise<object>;
 
-	private touchBarGroups: Electron.TouchBarSegmentedControl[];
+	private readonly touchBarGroups: Electron.TouchBarSegmentedControl[];
 
 	constructor(
 		config: IWindowCreationOptions,
@@ -517,7 +517,7 @@ export class CodeWindow extends Disposable implements ICodeWindow {
 
 		// Make window visible if it did not open in N seconds because this indicates an error
 		// Only do this when running out of sources and not when running tests
-		if (!this.environmentService.isBuilt && !this.environmentService.extensionTestsPath) {
+		if (!this.environmentService.isBuilt && !this.environmentService.extensionTestsLocationURI) {
 			this.showTimeoutHandle = setTimeout(() => {
 				if (this._win && !this._win.isVisible() && !this._win.isMinimized()) {
 					this._win.show();

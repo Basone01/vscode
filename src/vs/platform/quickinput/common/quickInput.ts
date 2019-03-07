@@ -191,6 +191,10 @@ export interface IQuickPick<T extends IQuickPickItem> extends IQuickInput {
 	readonly onDidChangeSelection: Event<T[]>;
 
 	readonly keyMods: IKeyMods;
+
+	valueSelection: Readonly<[number, number]> | undefined;
+
+	validationMessage: string | undefined;
 }
 
 export interface IInputBox extends IQuickInput {

@@ -18,46 +18,82 @@
 	"contributes": {
 		"debuggers": [
 			{
-				"type": "node",
+				"type": "*",
 				"configurationAttributes": {
 					"launch": {
 						"properties": {
 							"serverReadyAction": {
-								"type": "object",
-								"markdownDescription": "Server Ready options.",
-								"default": {
-									"action": "openExternally"
-								},
-								"properties": {
-									"pattern": {
-										"type": "string",
-										"markdownDescription": "Server is ready if this pattern appears on the debug console. The first group must include the port number.",
-										"default": "listening on port ([0-9]+)"
+								"oneOf": [
+									{
+										"type": "object",
+										"additionalProperties": false,
+										"markdownDescription": "%debug.server.ready.serverReadyAction.description%",
+										"default": {
+											"action": "openExternally"
+										},
+										"properties": {
+											"action": {
+												"type": "string",
+												"enum": [
+													"openExternally"
+												],
+												"enumDescriptions": [
+													"%debug.server.ready.action.openExternally.description%",
+													"%debug.server.ready.action.debugWithChrome.description%"
+												],
+												"markdownDescription": "%debug.server.ready.action.description%",
+												"default": "openExternally"
+											},
+											"pattern": {
+												"type": "string",
+												"markdownDescription": "%debug.server.ready.pattern.description%",
+												"default": "listening on port ([0-9]+)"
+											},
+											"uriFormat": {
+												"type": "string",
+												"markdownDescription": "%debug.server.ready.uriFormat.description%",
+												"default": "http://localhost:%s"
+											}
+										}
 									},
-									"uriFormat": {
-										"type": "string",
-										"markdownDescription": "A format string used when constructing the URI. The first '%s' is substituted with the port number.",
-										"default": "http://localhost:%s"
-									},
-									"action": {
-										"type": "string",
-										"enum": [
-											"openExternally",
-											"debugWithChrome"
-										],
-										"enumDescriptions": [
-											"Open URI externally.",
-											"Start debugging with the Debugger for Chrome."
-										],
-										"markdownDescription": "Determines what to do with when the server is ready.",
-										"default": "openExternally"
-									},
-									"webRoot": {
-										"type": "string",
-										"markdownDescription": "Literally passed to chrome debug configuration.",
-										"default": "${workspaceFolder}"
+									{
+										"type": "object",
+										"additionalProperties": false,
+										"markdownDescription": "%debug.server.ready.serverReadyAction.description%",
+										"default": {
+											"action": "openExternally"
+										},
+										"properties": {
+											"action": {
+												"type": "string",
+												"enum": [
+													"debugWithChrome"
+												],
+												"enumDescriptions": [
+													"%debug.server.ready.action.openExternally.description%",
+													"%debug.server.ready.action.debugWithChrome.description%"
+												],
+												"markdownDescription": "%debug.server.ready.action.description%",
+												"default": "openExternally"
+											},
+											"pattern": {
+												"type": "string",
+												"markdownDescription": "%debug.server.ready.pattern.description%",
+												"default": "listening on port ([0-9]+)"
+											},
+											"uriFormat": {
+												"type": "string",
+												"markdownDescription": "%debug.server.ready.uriFormat.description%",
+												"default": "http://localhost:%s"
+											},
+											"webRoot": {
+												"type": "string",
+												"markdownDescription": "%debug.server.ready.webRoot.description%",
+												"default": "${workspaceFolder}"
+											}
+										}
 									}
-								}
+								]
 							}
 						}
 					}

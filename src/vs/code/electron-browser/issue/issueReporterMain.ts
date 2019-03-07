@@ -64,14 +64,14 @@ export class IssueReporter extends Disposable {
 	private environmentService: IEnvironmentService;
 	private telemetryService: ITelemetryService;
 	private logService: ILogService;
-	private issueReporterModel: IssueReporterModel;
+	private readonly issueReporterModel: IssueReporterModel;
 	private numberOfSearchResultsDisplayed = 0;
 	private receivedSystemInfo = false;
 	private receivedPerformanceInfo = false;
 	private shouldQueueSearch = false;
 	private hasBeenSubmitted = false;
 
-	private previewButton: Button;
+	private readonly previewButton: Button;
 
 	constructor(configuration: IssueReporterConfiguration) {
 		super();
@@ -346,7 +346,7 @@ export class IssueReporter extends Disposable {
 			const value = (<HTMLInputElement>e.target).value;
 			const problemSourceHelpText = this.getElementById('problem-source-help-text')!;
 			if (value === '') {
-				this.issueReporterModel.update({ fileOnExtension: undefined, includeExtensions: false });
+				this.issueReporterModel.update({ fileOnExtension: undefined });
 				show(problemSourceHelpText);
 				this.clearSearchResults();
 				this.render();
@@ -356,7 +356,7 @@ export class IssueReporter extends Disposable {
 			}
 
 			const fileOnExtension = JSON.parse(value);
-			this.issueReporterModel.update({ fileOnExtension: fileOnExtension, includeExtensions: !fileOnExtension });
+			this.issueReporterModel.update({ fileOnExtension: fileOnExtension });
 			this.render();
 
 			const title = (<HTMLInputElement>this.getElementById('issue-title')).value;

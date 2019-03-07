@@ -40,7 +40,7 @@ class MessageWidget {
 	private readonly _relatedDiagnostics = new WeakMap<HTMLElement, IRelatedInformation>();
 	private readonly _disposables: IDisposable[] = [];
 
-	constructor(parent: HTMLElement, editor: ICodeEditor, onRelatedInformation: (related: IRelatedInformation) => void, ) {
+	constructor(parent: HTMLElement, editor: ICodeEditor, onRelatedInformation: (related: IRelatedInformation) => void) {
 		this._editor = editor;
 
 		const domNode = document.createElement('div');
@@ -69,7 +69,6 @@ class MessageWidget {
 			horizontalScrollbarSize: 3,
 			verticalScrollbarSize: 3
 		});
-		dom.addClass(this._scrollable.getDomNode(), 'block');
 		parent.appendChild(this._scrollable.getDomNode());
 		this._disposables.push(this._scrollable.onScroll(e => {
 			domNode.style.left = `-${e.scrollLeft}px`;
@@ -92,13 +91,13 @@ class MessageWidget {
 		}
 
 		dom.clearNode(this._messageBlock);
+		this._editor.applyFontInfo(this._messageBlock);
 		let lastLineElement = this._messageBlock;
 		for (const line of lines) {
 			lastLineElement = document.createElement('div');
 			lastLineElement.innerText = line;
-			this._editor.applyFontInfo(lastLineElement);
 			if (line === '') {
-				lastLineElement.style.height = lastLineElement.style.lineHeight;
+				lastLineElement.style.height = this._messageBlock.style.lineHeight;
 			}
 			this._messageBlock.appendChild(lastLineElement);
 		}
@@ -121,6 +120,7 @@ class MessageWidget {
 		}
 
 		dom.clearNode(this._relatedBlock);
+		this._editor.applyFontInfo(this._relatedBlock);
 		if (isNonEmptyArray(relatedInformation)) {
 			const relatedInformationNode = this._relatedBlock.appendChild(document.createElement('div'));
 			relatedInformationNode.style.paddingTop = `${Math.floor(this._editor.getConfiguration().lineHeight * 0.66)}px`;
@@ -138,7 +138,6 @@ class MessageWidget {
 
 				let relatedMessage = document.createElement('span');
 				relatedMessage.innerText = related.message;
-				this._editor.applyFontInfo(relatedMessage);
 
 				container.appendChild(relatedResource);
 				container.appendChild(relatedMessage);
@@ -156,6 +155,7 @@ class MessageWidget {
 
 	layout(height: number, width: number): void {
 		this._scrollable.getDomNode().style.height = `${height}px`;
+		this._scrollable.getDomNode().style.width = `${width}px`;
 		this._scrollable.setScrollDimensions({ width, height });
 	}
 
@@ -173,13 +173,14 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 	private _severity: MarkerSeverity;
 	private _backgroundColor?: Color;
 	private _onDidSelectRelatedInformation = new Emitter<IRelatedInformation>();
+	private _heightInPixel: number;
 
 	readonly onDidSelectRelatedInformation: Event<IRelatedInformation> = this._onDidSelectRelatedInformation.event;
 
 	constructor(
 		editor: ICodeEditor,
-		private actions: IAction[],
-		private _themeService: IThemeService
+		private readonly actions: IAction[],
+		private readonly _themeService: IThemeService
 	) {
 		super(editor, { showArrow: true, showFrame: true, isAccessible: true });
 		this._severity = MarkerSeverity.Warning;
@@ -304,8 +305,13 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 
 	protected _doLayoutBody(heightInPixel: number, widthInPixel: number): void {
 		super._doLayoutBody(heightInPixel, widthInPixel);
+		this._heightInPixel = heightInPixel;
 		this._message.layout(heightInPixel, widthInPixel);
 		this._container.style.height = `${heightInPixel}px`;
+	}
+
+	public _onWidth(widthInPixel: number): void {
+		this._message.layout(this._heightInPixel, widthInPixel);
 	}
 
 	protected _relayout(): void {

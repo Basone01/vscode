@@ -5,7 +5,6 @@
 
 import { mapArrayOrNot } from 'vs/base/common/arrays';
 import { CancellationToken } from 'vs/base/common/cancellation';
-import { Event } from 'vs/base/common/event';
 import * as glob from 'vs/base/common/glob';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import * as objects from 'vs/base/common/objects';
@@ -17,7 +16,6 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 
 export const VIEW_ID = 'workbench.view.search';
 
-export const ISearchHistoryService = createDecorator<ISearchHistoryService>('searchHistoryService');
 export const ISearchService = createDecorator<ISearchService>('searchService');
 
 /**
@@ -31,27 +29,11 @@ export interface ISearchService {
 	registerSearchResultProvider(scheme: string, type: SearchProviderType, provider: ISearchResultProvider): IDisposable;
 }
 
-export interface ISearchHistoryValues {
-	search?: string[];
-	replace?: string[];
-	include?: string[];
-	exclude?: string[];
-}
-
-export interface ISearchHistoryService {
-	_serviceBrand: any;
-	onDidClearHistory: Event<void>;
-	clearHistory(): void;
-	load(): ISearchHistoryValues;
-	save(history: ISearchHistoryValues): void;
-}
-
 /**
  * TODO@roblou - split text from file search entirely, or share code in a more natural way.
  */
 export const enum SearchProviderType {
 	file,
-	fileIndex,
 	text
 }
 
@@ -87,9 +69,6 @@ export interface ICommonQueryProps<U extends UriComponents> {
 export interface IFileQueryProps<U extends UriComponents> extends ICommonQueryProps<U> {
 	type: QueryType.File;
 	filePattern?: string;
-
-	// TODO: Remove this!
-	disregardExcludeSettings?: boolean;
 
 	/**
 	 * If true no results will be returned. Instead `limitHit` will indicate if at least one result exists or not.
@@ -215,10 +194,10 @@ export interface ITextSearchStats {
 
 export interface IFileSearchStats {
 	fromCache: boolean;
-	detailStats: ISearchEngineStats | ICachedSearchStats | IFileSearchProviderStats | IFileIndexProviderStats;
+	detailStats: ISearchEngineStats | ICachedSearchStats | IFileSearchProviderStats;
 
 	resultCount: number;
-	type: 'fileIndexProvider' | 'fileSearchProvider' | 'searchProcess';
+	type: 'fileSearchProvider' | 'searchProcess';
 	sortingTime?: number;
 }
 
@@ -240,14 +219,6 @@ export interface ISearchEngineStats {
 export interface IFileSearchProviderStats {
 	providerTime: number;
 	postProcessTime: number;
-}
-
-export interface IFileIndexProviderStats {
-	providerTime: number;
-	providerResultCount: number;
-	fileWalkTime: number;
-	directoriesWalked: number;
-	filesWalked: number;
 }
 
 export class FileMatch implements IFileMatch {

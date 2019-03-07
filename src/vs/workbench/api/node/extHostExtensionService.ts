@@ -5,6 +5,7 @@
 
 import * as nls from 'vs/nls';
 import * as path from 'vs/base/common/path';
+import { originalFSPath } from 'vs/base/common/resources';
 import { Barrier } from 'vs/base/common/async';
 import { IDisposable, dispose, toDisposable } from 'vs/base/common/lifecycle';
 import { TernarySearchTree } from 'vs/base/common/map';
@@ -28,6 +29,7 @@ import { ResolvedAuthority } from 'vs/platform/remote/common/remoteAuthorityReso
 import * as vscode from 'vscode';
 import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 import { IWorkspace } from 'vs/platform/workspace/common/workspace';
+import { Schemas } from 'vs/base/common/network';
 
 class ExtensionMemento implements IExtensionMemento {
 
@@ -114,6 +116,9 @@ class ExtensionStoragePath {
 			return Promise.resolve(undefined);
 		}
 
+		if (!this._environment.appSettingsHome) {
+			return undefined;
+		}
 		const storageName = this._workspace.id;
 		const storagePath = path.join(this._environment.appSettingsHome.fsPath, 'workspaceStorage', storageName);
 
@@ -220,7 +225,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 
 			actualActivateExtension: async (extensionId: ExtensionIdentifier, reason: ExtensionActivationReason): Promise<ActivatedExtension> => {
 				if (hostExtensions.has(ExtensionIdentifier.toKey(extensionId))) {
-					let activationEvent = (reason instanceof ExtensionActivatedByEvent ? reason.activationEvent : null);
+					const activationEvent = (reason instanceof ExtensionActivatedByEvent ? reason.activationEvent : null);
 					await this._mainThreadExtensionsProxy.$activateExtension(extensionId, activationEvent);
 					return new HostExtension();
 				}
@@ -340,7 +345,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 			return result;
 		}
 
-		let extension = this._activator.getActivatedExtension(extensionId);
+		const extension = this._activator.getActivatedExtension(extensionId);
 		if (!extension) {
 			return result;
 		}
@@ -377,7 +382,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 		this._mainThreadExtensionsProxy.$onWillActivateExtension(extensionDescription.identifier);
 		return this._doActivateExtension(extensionDescription, reason).then((activatedExtension) => {
 			const activationTimes = activatedExtension.activationTimes;
-			let activationEvent = (reason instanceof ExtensionActivatedByEvent ? reason.activationEvent : null);
+			const activationEvent = (reason instanceof ExtensionActivatedByEvent ? reason.activationEvent : null);
 			this._mainThreadExtensionsProxy.$onDidActivateExtension(extensionDescription.identifier, activationTimes.startup, activationTimes.codeLoadingTime, activationTimes.activateCallTime, activationTimes.activateResolvedTime, activationEvent);
 			this._logExtensionActivationTimes(extensionDescription, reason, 'success', activationTimes);
 			return activatedExtension;
@@ -389,7 +394,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 	}
 
 	private _logExtensionActivationTimes(extensionDescription: IExtensionDescription, reason: ExtensionActivationReason, outcome: string, activationTimes?: ExtensionActivationTimes) {
-		let event = getTelemetryActivationEvent(extensionDescription, reason);
+		const event = getTelemetryActivationEvent(extensionDescription, reason);
 		/* __GDPR__
 			"extensionActivationTimes" : {
 				"${include}": [
@@ -407,7 +412,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 	}
 
 	private _doActivateExtension(extensionDescription: IExtensionDescription, reason: ExtensionActivationReason): Promise<ActivatedExtension> {
-		let event = getTelemetryActivationEvent(extensionDescription, reason);
+		const event = getTelemetryActivationEvent(extensionDescription, reason);
 		/* __GDPR__
 			"activatePlugin" : {
 				"${include}": [
@@ -434,8 +439,8 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 
 	private _loadExtensionContext(extensionDescription: IExtensionDescription): Promise<IExtensionContext> {
 
-		let globalState = new ExtensionMemento(extensionDescription.identifier.value, true, this._storage);
-		let workspaceState = new ExtensionMemento(extensionDescription.identifier.value, false, this._storage);
+		const globalState = new ExtensionMemento(extensionDescription.identifier.value, true, this._storage);
+		const workspaceState = new ExtensionMemento(extensionDescription.identifier.value, false, this._storage);
 
 		this._extHostLogService.trace(`ExtensionService#loadExtensionContext ${extensionDescription.identifier.value}`);
 		return Promise.all([
@@ -608,19 +613,18 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 	}
 
 	private _doHandleExtensionTests(): Promise<void> {
-		if (!this._initData.environment.extensionTestsPath || !this._initData.environment.extensionDevelopmentLocationURI) {
+		const { extensionDevelopmentLocationURI, extensionTestsLocationURI } = this._initData.environment;
+		if (!(extensionDevelopmentLocationURI && extensionTestsLocationURI && extensionTestsLocationURI.scheme === Schemas.file)) {
 			return Promise.resolve(undefined);
 		}
 
-		if (this._initData.autoStart) {
-			return Promise.resolve(undefined); // https://github.com/Microsoft/vscode/issues/66936
-		}
+		const extensionTestsPath = originalFSPath(extensionTestsLocationURI);
 
 		// Require the test runner via node require from the provided path
 		let testRunner: ITestRunner | undefined;
 		let requireError: Error | undefined;
 		try {
-			testRunner = <any>require.__$__nodeRequire(this._initData.environment.extensionTestsPath);
+			testRunner = <any>require.__$__nodeRequire(extensionTestsPath);
 		} catch (error) {
 			requireError = error;
 		}
@@ -628,7 +632,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 		// Execute the runner if it follows our spec
 		if (testRunner && typeof testRunner.run === 'function') {
 			return new Promise<void>((c, e) => {
-				testRunner!.run(this._initData.environment.extensionTestsPath!, (error, failures) => {
+				testRunner!.run(extensionTestsPath, (error, failures) => {
 					if (error) {
 						e(error.toString());
 					} else {
@@ -646,7 +650,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 			this._gracefulExit(1 /* ERROR */);
 		}
 
-		return Promise.reject(new Error(requireError ? requireError.toString() : nls.localize('extensionTestError', "Path {0} does not point to a valid extension test runner.", this._initData.environment.extensionTestsPath)));
+		return Promise.reject(new Error(requireError ? requireError.toString() : nls.localize('extensionTestError', "Path {0} does not point to a valid extension test runner.", extensionTestsPath)));
 	}
 
 	private _gracefulExit(code: number): void {
@@ -759,7 +763,7 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
 	}
 
 	public async $test_down(size: number): Promise<Buffer> {
-		let b = Buffer.alloc(size, Math.random() % 256);
+		const b = Buffer.alloc(size, Math.random() % 256);
 		return b;
 	}
 
@@ -795,7 +799,7 @@ function getTelemetryActivationEvent(extensionDescription: IExtensionDescription
 			"reason": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
 		}
 	*/
-	let event = {
+	const event = {
 		id: extensionDescription.identifier.value,
 		name: extensionDescription.name,
 		extensionVersion: extensionDescription.version,

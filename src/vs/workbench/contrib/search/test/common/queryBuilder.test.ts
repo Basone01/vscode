@@ -59,6 +59,46 @@ suite('QueryBuilder', () => {
 			});
 	});
 
+	test('normalize literal newlines', () => {
+		assertEqualTextQueries(
+			queryBuilder.text({ pattern: 'foo\nbar', isRegExp: true }),
+			{
+				folderQueries: [],
+				contentPattern: {
+					pattern: 'foo\\nbar',
+					isRegExp: true,
+					isMultiline: true
+				},
+				type: QueryType.Text
+			});
+
+		assertEqualTextQueries(
+			queryBuilder.text({ pattern: 'foo\nbar', isRegExp: false }),
+			{
+				folderQueries: [],
+				contentPattern: {
+					pattern: 'foo\nbar',
+					isRegExp: false,
+					isMultiline: true
+				},
+				type: QueryType.Text
+			});
+	});
+
+	test('does not split glob pattern when expandPatterns disabled', () => {
+		assertEqualQueries(
+			queryBuilder.file([ROOT_1_URI], { includePattern: '**/foo, **/bar' }),
+			{
+				folderQueries: [{
+					folder: ROOT_1_URI
+				}],
+				type: QueryType.File,
+				includePattern: {
+					'**/foo, **/bar': true
+				}
+			});
+	});
+
 	test('folderResources', () => {
 		assertEqualTextQueries(
 			queryBuilder.text(
@@ -619,15 +659,22 @@ suite('QueryBuilder', () => {
 						}]
 					}
 				],
-				// TODO @ rob
-				// [
-				// 	'../',
-				// 	{
-				// 		searchPaths: [{
-				// 			searchPath: getUri('foo/')
-				// 		}]
-				// 	}
-				// ]
+				[
+					'../',
+					{
+						searchPaths: [{
+							searchPath: getUri('/foo')
+						}]
+					}
+				],
+				[
+					'..\\bar',
+					{
+						searchPaths: [{
+							searchPath: getUri('/foo/bar')
+						}]
+					}
+				]
 			];
 			cases.forEach(testIncludesDataItem);
 		});
