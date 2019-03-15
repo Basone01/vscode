@@ -8,10 +8,10 @@ import { IJSONSchemaMap } from 'vs/base/common/jsonSchema';
 import * as Objects from 'vs/base/common/objects';
 import { UriComponents } from 'vs/base/common/uri';
 
-import { IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
 import { ProblemMatcher } from 'vs/workbench/contrib/tasks/common/problemMatcher';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { RawContextKey } from 'vs/platform/contextkey/common/contextkey';
+import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 
 export const TASK_RUNNING_STATE = new RawContextKey<boolean>('taskRunning', false);
 
@@ -229,7 +229,8 @@ export namespace PresentationOptions {
 
 export enum RuntimeType {
 	Shell = 1,
-	Process = 2
+	Process = 2,
+	CustomExecution = 3
 }
 
 export namespace RuntimeType {
@@ -239,6 +240,8 @@ export namespace RuntimeType {
 				return RuntimeType.Shell;
 			case 'process':
 				return RuntimeType.Process;
+			case 'customExecution':
+				return RuntimeType.CustomExecution;
 			default:
 				return RuntimeType.Process;
 		}
@@ -594,11 +597,28 @@ export class CustomTask extends CommonTask {
 			return this._source.customizes;
 		} else {
 			let type: string;
-			if (this.command !== undefined) {
-				type = this.command.runtime === RuntimeType.Shell ? 'shell' : 'process';
-			} else {
-				type = '$composite';
+			const commandRuntime = this.command ? this.command.runtime : undefined;
+			switch (commandRuntime) {
+				case RuntimeType.Shell:
+					type = 'shell';
+					break;
+
+				case RuntimeType.Process:
+					type = 'process';
+					break;
+
+				case RuntimeType.CustomExecution:
+					type = 'customExecution';
+					break;
+
+				case undefined:
+					type = '$composite';
+					break;
+
+				default:
+					throw new Error('Unexpected task runtime');
 			}
+
 			let result: KeyedTaskIdentifier = {
 				type,
 				_key: this._id,
@@ -861,6 +881,7 @@ export interface TaskEvent {
 	group?: string;
 	processId?: number;
 	exitCode?: number;
+	terminalId?: number;
 	__task?: Task;
 }
 
@@ -871,12 +892,13 @@ export const enum TaskRunSource {
 }
 
 export namespace TaskEvent {
-	export function create(kind: TaskEventKind.ProcessStarted | TaskEventKind.ProcessEnded, task: Task, processIdOrExitCode: number): TaskEvent;
+	export function create(kind: TaskEventKind.ProcessStarted | TaskEventKind.ProcessEnded, task: Task, processIdOrExitCode?: number): TaskEvent;
+	export function create(kind: TaskEventKind.Start, task: Task, terminalId?: number): TaskEvent;
 	export function create(kind: TaskEventKind.DependsOnStarted | TaskEventKind.Start | TaskEventKind.Active | TaskEventKind.Inactive | TaskEventKind.Terminated | TaskEventKind.End, task: Task): TaskEvent;
 	export function create(kind: TaskEventKind.Changed): TaskEvent;
-	export function create(kind: TaskEventKind, task?: Task, processIdOrExitCode?: number): TaskEvent {
+	export function create(kind: TaskEventKind, task?: Task, processIdOrExitCodeOrTerminalId?: number): TaskEvent {
 		if (task) {
-			let result = {
+			let result: TaskEvent = {
 				kind: kind,
 				taskId: task._id,
 				taskName: task.configurationProperties.name,
@@ -884,12 +906,15 @@ export namespace TaskEvent {
 				group: task.configurationProperties.group,
 				processId: undefined as number | undefined,
 				exitCode: undefined as number | undefined,
+				terminalId: undefined as number | undefined,
 				__task: task,
 			};
-			if (kind === TaskEventKind.ProcessStarted) {
-				result.processId = processIdOrExitCode;
+			if (kind === TaskEventKind.Start) {
+				result.terminalId = processIdOrExitCodeOrTerminalId;
+			} else if (kind === TaskEventKind.ProcessStarted) {
+				result.processId = processIdOrExitCodeOrTerminalId;
 			} else if (kind === TaskEventKind.ProcessEnded) {
-				result.exitCode = processIdOrExitCode;
+				result.exitCode = processIdOrExitCodeOrTerminalId;
 			}
 			return Object.freeze(result);
 		} else {

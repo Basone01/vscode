@@ -223,6 +223,7 @@ export interface ITerminalService {
 	 * @param name The name of the terminal.
 	 */
 	createTerminalRenderer(name: string): ITerminalInstance;
+
 	/**
 	 * Creates a raw terminal instance, this should not be used outside of the terminal part.
 	 */
@@ -439,6 +440,14 @@ export interface ITerminalInstance {
 	dispose(immediate?: boolean): void;
 
 	/**
+	 * Indicates that a consumer of a renderer only terminal is finished with it.
+	 *
+	 * @param exitCode The exit code of the terminal. Zero indicates success, non-zero indicates
+	 * failure.
+	 */
+	rendererExit(exitCode: number): void;
+
+	/**
 	 * Forces the terminal to redraw its viewport.
 	 */
 	forceRedraw(): void;
@@ -628,6 +637,9 @@ export interface ITerminalProcessManager extends IDisposable {
 	readonly processState: ProcessState;
 	readonly ptyProcessReady: Promise<void>;
 	readonly shellProcessId: number;
+	readonly remoteAuthority: string | undefined;
+	readonly os: platform.OperatingSystem | undefined;
+	readonly userHome: string | undefined;
 
 	readonly onProcessReady: Event<void>;
 	readonly onProcessData: Event<string>;

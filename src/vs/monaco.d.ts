@@ -2554,7 +2554,18 @@ declare namespace monaco.editor {
 		/**
 		 * Max suggestions to show in suggestions. Defaults to 12.
 		 */
-		maxSuggestionsToShow?: boolean;
+		maxVisibleSuggestions?: boolean;
+		/**
+		 * Names of suggestion types to filter.
+		 */
+		filteredTypes?: Record<string, boolean>;
+	}
+
+	export interface IGotoLocationOptions {
+		/**
+		 * Control how goto-command work when having multiple results.
+		 */
+		many?: 'peek' | 'revealAndPeek' | 'reveal';
 	}
 
 	/**
@@ -2831,6 +2842,10 @@ declare namespace monaco.editor {
 		 * Suggest options.
 		 */
 		suggest?: ISuggestOptions;
+		/**
+		 *
+		 */
+		gotoLocation?: IGotoLocationOptions;
 		/**
 		 * Enable quick suggestions (shadow suggestions)
 		 * Defaults to true.
@@ -3192,6 +3207,10 @@ declare namespace monaco.editor {
 		readonly sticky: boolean;
 	}
 
+	export interface InternalGoToLocationOptions {
+		readonly many: 'peek' | 'revealAndPeek' | 'reveal';
+	}
+
 	export interface InternalSuggestOptions {
 		readonly filterGraceful: boolean;
 		readonly snippets: 'top' | 'bottom' | 'inline' | 'none';
@@ -3199,7 +3218,8 @@ declare namespace monaco.editor {
 		readonly localityBonus: boolean;
 		readonly shareSuggestSelections: boolean;
 		readonly showIcons: boolean;
-		readonly maxVisibileSuggestions: number;
+		readonly maxVisibleSuggestions: number;
+		readonly filteredTypes: Record<string, boolean>;
 	}
 
 	export interface InternalParameterHintOptions {
@@ -3285,6 +3305,7 @@ declare namespace monaco.editor {
 		readonly suggestLineHeight: number;
 		readonly tabCompletion: 'on' | 'off' | 'onlySnippets';
 		readonly suggest: InternalSuggestOptions;
+		readonly gotoLocation: InternalGoToLocationOptions;
 		readonly selectionHighlight: boolean;
 		readonly occurrencesHighlight: boolean;
 		readonly codeLens: boolean;
@@ -4571,7 +4592,7 @@ declare namespace monaco.languages {
 		/**
 		 * The string that appears on the last line and closes the doc comment (e.g. ' * /').
 		 */
-		close: string;
+		close?: string;
 	}
 
 	/**

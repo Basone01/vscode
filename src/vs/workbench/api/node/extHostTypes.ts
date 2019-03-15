@@ -486,7 +486,7 @@ export class TextEdit {
 	}
 
 	protected _range: Range;
-	protected _newText: string;
+	protected _newText: string | null;
 	protected _newEol: EndOfLine;
 
 	get range(): Range {
@@ -522,9 +522,9 @@ export class TextEdit {
 		this._newEol = value;
 	}
 
-	constructor(range: Range, newText: string) {
+	constructor(range: Range, newText: string | null) {
 		this.range = range;
-		this.newText = newText;
+		this._newText = newText;
 	}
 
 	toJSON(): any {
@@ -1095,34 +1095,18 @@ CodeActionKind.SourceOrganizeImports = CodeActionKind.Source.append('organizeImp
 CodeActionKind.SourceFixAll = CodeActionKind.Source.append('fixAll');
 
 @es5ClassCompat
-export class SelectionRangeKind {
-
-	private static readonly _sep = '.';
-
-	static readonly Empty = new SelectionRangeKind('');
-	static readonly Statement = SelectionRangeKind.Empty.append('statement');
-	static readonly Declaration = SelectionRangeKind.Empty.append('declaration');
-
-	readonly value: string;
-
-	constructor(value: string) {
-		this.value = value;
-	}
-
-	append(value: string): SelectionRangeKind {
-		return new SelectionRangeKind(this.value ? this.value + SelectionRangeKind._sep + value : value);
-	}
-}
-
-@es5ClassCompat
 export class SelectionRange {
 
-	kind: SelectionRangeKind;
 	range: Range;
+	parent?: SelectionRange;
 
-	constructor(range: Range, kind: SelectionRangeKind, ) {
+	constructor(range: Range, parent?: SelectionRange) {
 		this.range = range;
-		this.kind = kind;
+		this.parent = parent;
+
+		if (parent && !parent.range.contains(this.range)) {
+			throw new Error('Invalid argument: parent must contain this range');
+		}
 	}
 }
 
@@ -1708,9 +1692,33 @@ export enum TaskScope {
 	Workspace = 2
 }
 
-@es5ClassCompat
-export class Task implements vscode.Task {
+export class CustomExecution implements vscode.CustomExecution {
+	private _callback: (args: vscode.TerminalRenderer, cancellationToken: vscode.CancellationToken) => Thenable<number>;
 
+	constructor(callback: (args: vscode.TerminalRenderer, cancellationToken: vscode.CancellationToken) => Thenable<number>) {
+		this._callback = callback;
+	}
+
+	public computeId(): string {
+		const hash = crypto.createHash('md5');
+		hash.update('customExecution');
+		hash.update(generateUuid());
+		return hash.digest('hex');
+	}
+
+	public set callback(value: (args: vscode.TerminalRenderer, cancellationToken: vscode.CancellationToken) => Thenable<number>) {
+		this._callback = value;
+	}
+
+	public get callback(): (args: vscode.TerminalRenderer, cancellationToken: vscode.CancellationToken) => Thenable<number> {
+		return this._callback;
+	}
+}
+
+@es5ClassCompat
+export class Task implements vscode.Task2 {
+
+	private static ExtensionCallbackType: string = 'customExecution';
 	private static ProcessType: string = 'process';
 	private static ShellType: string = 'shell';
 	private static EmptyType: string = '$empty';
@@ -1720,7 +1728,7 @@ export class Task implements vscode.Task {
 	private _definition: vscode.TaskDefinition;
 	private _scope: vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
 	private _name: string;
-	private _execution: ProcessExecution | ShellExecution | undefined;
+	private _execution: ProcessExecution | ShellExecution | CustomExecution | undefined;
 	private _problemMatchers: string[];
 	private _hasDefinedMatchers: boolean;
 	private _isBackground: boolean;
@@ -1729,8 +1737,8 @@ export class Task implements vscode.Task {
 	private _presentationOptions: vscode.TaskPresentationOptions;
 	private _runOptions: vscode.RunOptions;
 
-	constructor(definition: vscode.TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution, problemMatchers?: string | string[]);
-	constructor(definition: vscode.TaskDefinition, scope: vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder, name: string, source: string, execution?: ProcessExecution | ShellExecution, problemMatchers?: string | string[]);
+	constructor(definition: vscode.TaskDefinition, name: string, source: string, execution?: ProcessExecution | ShellExecution | CustomExecution, problemMatchers?: string | string[]);
+	constructor(definition: vscode.TaskDefinition, scope: vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder, name: string, source: string, execution?: ProcessExecution | ShellExecution | CustomExecution, problemMatchers?: string | string[]);
 	constructor(definition: vscode.TaskDefinition, arg2: string | (vscode.TaskScope.Global | vscode.TaskScope.Workspace) | vscode.WorkspaceFolder, arg3: any, arg4?: any, arg5?: any, arg6?: any) {
 		this.definition = definition;
 		let problemMatchers: string | string[];
@@ -1795,6 +1803,11 @@ export class Task implements vscode.Task {
 				type: Task.ShellType,
 				id: this._execution.computeId()
 			};
+		} else if (this._execution instanceof CustomExecution) {
+			this._definition = {
+				type: Task.ExtensionCallbackType,
+				id: this._execution.computeId()
+			};
 		} else {
 			this._definition = {
 				type: Task.EmptyType,
@@ -1837,17 +1850,25 @@ export class Task implements vscode.Task {
 	}
 
 	get execution(): ProcessExecution | ShellExecution | undefined {
-		return this._execution;
+		return (this._execution instanceof CustomExecution) ? undefined : this._execution;
 	}
 
 	set execution(value: ProcessExecution | ShellExecution | undefined) {
+		this.execution2 = value;
+	}
+
+	get execution2(): ProcessExecution | ShellExecution | CustomExecution | undefined {
+		return this._execution;
+	}
+
+	set execution2(value: ProcessExecution | ShellExecution | CustomExecution | undefined) {
 		if (value === null) {
 			value = undefined;
 		}
 		this.clear();
 		this._execution = value;
 		const type = this._definition.type;
-		if (Task.EmptyType === type || Task.ProcessType === type || Task.ShellType === type) {
+		if (Task.EmptyType === type || Task.ProcessType === type || Task.ShellType === type || Task.ExtensionCallbackType === type) {
 			this.computeDefinitionBasedOnExecution();
 		}
 	}

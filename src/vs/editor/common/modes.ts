@@ -324,7 +324,10 @@ export const completionKindToCssClass = (function () {
 /**
  * @internal
  */
-export let completionKindFromString = (function () {
+export let completionKindFromString: {
+	(value: string): CompletionItemKind;
+	(value: string, strict: true): CompletionItemKind | undefined;
+} = (function () {
 	let data: Record<string, CompletionItemKind> = Object.create(null);
 	data['method'] = CompletionItemKind.Method;
 	data['function'] = CompletionItemKind.Function;
@@ -343,6 +346,7 @@ export let completionKindFromString = (function () {
 	data['constant'] = CompletionItemKind.Constant;
 	data['enum'] = CompletionItemKind.Enum;
 	data['enum-member'] = CompletionItemKind.EnumMember;
+	data['enumMember'] = CompletionItemKind.EnumMember;
 	data['keyword'] = CompletionItemKind.Keyword;
 	data['snippet'] = CompletionItemKind.Snippet;
 	data['text'] = CompletionItemKind.Text;
@@ -352,9 +356,14 @@ export let completionKindFromString = (function () {
 	data['customcolor'] = CompletionItemKind.Customcolor;
 	data['folder'] = CompletionItemKind.Folder;
 	data['type-parameter'] = CompletionItemKind.TypeParameter;
+	data['typeParameter'] = CompletionItemKind.TypeParameter;
 
-	return function (value: string) {
-		return data[value] || CompletionItemKind.Property;
+	return function (value: string, strict?: true) {
+		let res = data[value];
+		if (typeof res === 'undefined' && !strict) {
+			res = CompletionItemKind.Property;
+		}
+		return res;
 	};
 })();
 
@@ -1194,11 +1203,11 @@ export interface Command {
  * @internal
  */
 export interface CommentInfo {
-	extensionId: string;
+	extensionId?: string;
 	threads: CommentThread[];
 	commentingRanges?: (IRange[] | CommentingRanges);
 	reply?: Command;
-	draftMode: DraftMode;
+	draftMode?: DraftMode;
 }
 
 /**
@@ -1249,18 +1258,20 @@ export interface CommentInput {
  */
 export interface CommentThread2 {
 	commentThreadHandle: number;
-	extensionId: string;
-	threadId: string;
-	resource: string;
+	extensionId?: string;
+	threadId: string | null;
+	resource: string | null;
 	range: IRange;
 	label: string;
 	comments: Comment[];
 	onDidChangeComments: Event<Comment[]>;
 	collapsibleState?: CommentThreadCollapsibleState;
-	input: CommentInput;
-	onDidChangeInput: Event<CommentInput>;
-	acceptInputCommands: Command[];
-	onDidChangeAcceptInputCommands: Event<Command[]>;
+	input?: CommentInput;
+	onDidChangeInput: Event<CommentInput | undefined>;
+	acceptInputCommand?: Command;
+	additionalCommands: Command[];
+	onDidChangeAcceptInputCommand: Event<Command>;
+	onDidChangeAdditionalCommands: Event<Command[]>;
 	onDidChangeRange: Event<IRange>;
 	onDidChangeLabel: Event<string>;
 	onDidChangeCollasibleState: Event<CommentThreadCollapsibleState>;
@@ -1281,9 +1292,9 @@ export interface CommentingRanges {
  * @internal
  */
 export interface CommentThread {
-	extensionId: string;
-	threadId: string;
-	resource: string;
+	extensionId?: string;
+	threadId: string | null;
+	resource: string | null;
 	range: IRange;
 	comments: Comment[];
 	collapsibleState?: CommentThreadCollapsibleState;
@@ -1316,10 +1327,10 @@ export interface Comment {
 	readonly commentId: string;
 	readonly body: IMarkdownString;
 	readonly userName: string;
-	readonly userIconPath: string;
+	readonly userIconPath?: string;
 	readonly canEdit?: boolean;
 	readonly canDelete?: boolean;
-	readonly command?: Command;
+	readonly selectCommand?: Command;
 	readonly editCommand?: Command;
 	readonly deleteCommand?: Command;
 	readonly isDraft?: boolean;
@@ -1356,9 +1367,9 @@ export interface CommentThreadChangedEvent {
  * @internal
  */
 export interface DocumentCommentProvider {
-	provideDocumentComments(resource: URI, token: CancellationToken): Promise<CommentInfo>;
-	createNewCommentThread(resource: URI, range: Range, text: string, token: CancellationToken): Promise<CommentThread>;
-	replyToCommentThread(resource: URI, range: Range, thread: CommentThread, text: string, token: CancellationToken): Promise<CommentThread>;
+	provideDocumentComments(resource: URI, token: CancellationToken): Promise<CommentInfo | null>;
+	createNewCommentThread(resource: URI, range: Range, text: string, token: CancellationToken): Promise<CommentThread | null>;
+	replyToCommentThread(resource: URI, range: Range, thread: CommentThread, text: string, token: CancellationToken): Promise<CommentThread | null>;
 	editComment(resource: URI, comment: Comment, text: string, token: CancellationToken): Promise<void>;
 	deleteComment(resource: URI, comment: Comment, token: CancellationToken): Promise<void>;
 	startDraft?(resource: URI, token: CancellationToken): Promise<void>;

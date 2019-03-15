@@ -12,6 +12,7 @@ import { FontInfo } from 'vs/editor/common/config/fontInfo';
 import { Constants } from 'vs/editor/common/core/uint';
 import { USUAL_WORD_SEPARATORS } from 'vs/editor/common/model/wordHelper';
 import { AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
+import { isObject } from 'vs/base/common/types';
 
 /**
  * Configuration options for editor scrollbars
@@ -210,7 +211,18 @@ export interface ISuggestOptions {
 	/**
 	 * Max suggestions to show in suggestions. Defaults to 12.
 	 */
-	maxSuggestionsToShow?: boolean;
+	maxVisibleSuggestions?: boolean;
+	/**
+	 * Names of suggestion types to filter.
+	 */
+	filteredTypes?: Record<string, boolean>;
+}
+
+export interface IGotoLocationOptions {
+	/**
+	 * Control how goto-command work when having multiple results.
+	 */
+	many?: 'peek' | 'revealAndPeek' | 'reveal';
 }
 
 /**
@@ -499,6 +511,10 @@ export interface IEditorOptions {
 	 * Suggest options.
 	 */
 	suggest?: ISuggestOptions;
+	/**
+	 *
+	 */
+	gotoLocation?: IGotoLocationOptions;
 	/**
 	 * Enable quick suggestions (shadow suggestions)
 	 * Defaults to true.
@@ -919,6 +935,10 @@ export interface InternalEditorHoverOptions {
 	readonly sticky: boolean;
 }
 
+export interface InternalGoToLocationOptions {
+	readonly many: 'peek' | 'revealAndPeek' | 'reveal';
+}
+
 export interface InternalSuggestOptions {
 	readonly filterGraceful: boolean;
 	readonly snippets: 'top' | 'bottom' | 'inline' | 'none';
@@ -926,7 +946,8 @@ export interface InternalSuggestOptions {
 	readonly localityBonus: boolean;
 	readonly shareSuggestSelections: boolean;
 	readonly showIcons: boolean;
-	readonly maxVisibileSuggestions: number;
+	readonly maxVisibleSuggestions: number;
+	readonly filteredTypes: Record<string, boolean>;
 }
 
 export interface InternalParameterHintOptions {
@@ -1008,6 +1029,7 @@ export interface EditorContribOptions {
 	readonly suggestLineHeight: number;
 	readonly tabCompletion: 'on' | 'off' | 'onlySnippets';
 	readonly suggest: InternalSuggestOptions;
+	readonly gotoLocation: InternalGoToLocationOptions;
 	readonly selectionHighlight: boolean;
 	readonly occurrencesHighlight: boolean;
 	readonly codeLens: boolean;
@@ -1379,7 +1401,17 @@ export class InternalEditorOptions {
 				&& a.localityBonus === b.localityBonus
 				&& a.shareSuggestSelections === b.shareSuggestSelections
 				&& a.showIcons === b.showIcons
-				&& a.maxVisibileSuggestions === b.maxVisibileSuggestions;
+				&& a.maxVisibleSuggestions === b.maxVisibleSuggestions;
+		}
+	}
+
+	private static _equalsGotoLocationOptions(a: InternalGoToLocationOptions | undefined, b: InternalGoToLocationOptions | undefined): boolean {
+		if (a === b) {
+			return true;
+		} else if (!a || !b) {
+			return false;
+		} else {
+			return a.many === b.many;
 		}
 	}
 
@@ -1423,6 +1455,7 @@ export class InternalEditorOptions {
 			&& a.suggestLineHeight === b.suggestLineHeight
 			&& a.tabCompletion === b.tabCompletion
 			&& this._equalsSuggestOptions(a.suggest, b.suggest)
+			&& InternalEditorOptions._equalsGotoLocationOptions(a.gotoLocation, b.gotoLocation)
 			&& a.selectionHighlight === b.selectionHighlight
 			&& a.occurrencesHighlight === b.occurrencesHighlight
 			&& a.codeLens === b.codeLens
@@ -1913,7 +1946,15 @@ export class EditorOptionsValidator {
 			localityBonus: _boolean(suggestOpts.localityBonus, defaults.localityBonus),
 			shareSuggestSelections: _boolean(suggestOpts.shareSuggestSelections, defaults.shareSuggestSelections),
 			showIcons: _boolean(suggestOpts.showIcons, defaults.showIcons),
-			maxVisibileSuggestions: _clampedInt(suggestOpts.maxSuggestionsToShow, defaults.maxVisibileSuggestions, 1, 12)
+			maxVisibleSuggestions: _clampedInt(suggestOpts.maxVisibleSuggestions, defaults.maxVisibleSuggestions, 1, 12),
+			filteredTypes: isObject(suggestOpts.filteredTypes) ? suggestOpts.filteredTypes : Object.create(null)
+		};
+	}
+
+	private static _santizeGotoLocationOpts(opts: IEditorOptions, defaults: InternalGoToLocationOptions): InternalGoToLocationOptions {
+		const gotoOpts = opts.gotoLocation || {};
+		return {
+			many: _stringSet<'peek' | 'revealAndPeek' | 'reveal'>(gotoOpts.many, defaults.many, ['peek', 'revealAndPeek', 'reveal'])
 		};
 	}
 
@@ -2069,6 +2110,7 @@ export class EditorOptionsValidator {
 			suggestLineHeight: _clampedInt(opts.suggestLineHeight, defaults.suggestLineHeight, 0, 1000),
 			tabCompletion: this._sanitizeTabCompletionOpts(opts.tabCompletion, defaults.tabCompletion),
 			suggest: this._sanitizeSuggestOpts(opts, defaults.suggest),
+			gotoLocation: this._santizeGotoLocationOpts(opts, defaults.gotoLocation),
 			selectionHighlight: _boolean(opts.selectionHighlight, defaults.selectionHighlight),
 			occurrencesHighlight: _boolean(opts.occurrencesHighlight, defaults.occurrencesHighlight),
 			codeLens: _boolean(opts.codeLens, defaults.codeLens),
@@ -2182,6 +2224,7 @@ export class InternalEditorOptionsFactory {
 				suggestLineHeight: opts.contribInfo.suggestLineHeight,
 				tabCompletion: opts.contribInfo.tabCompletion,
 				suggest: opts.contribInfo.suggest,
+				gotoLocation: opts.contribInfo.gotoLocation,
 				selectionHighlight: (accessibilityIsOn ? false : opts.contribInfo.selectionHighlight), // DISABLED WHEN SCREEN READER IS ATTACHED
 				occurrencesHighlight: (accessibilityIsOn ? false : opts.contribInfo.occurrencesHighlight), // DISABLED WHEN SCREEN READER IS ATTACHED
 				codeLens: (accessibilityIsOn ? false : opts.contribInfo.codeLens), // DISABLED WHEN SCREEN READER IS ATTACHED
@@ -2672,7 +2715,11 @@ export const EDITOR_DEFAULTS: IValidatedEditorOptions = {
 			localityBonus: false,
 			shareSuggestSelections: false,
 			showIcons: true,
-			maxVisibileSuggestions: 12
+			maxVisibleSuggestions: 12,
+			filteredTypes: Object.create(null)
+		},
+		gotoLocation: {
+			many: 'peek'
 		},
 		selectionHighlight: true,
 		occurrencesHighlight: true,

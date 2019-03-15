@@ -14,12 +14,13 @@ import { URI } from 'vs/base/common/uri';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { CancellationToken } from 'vs/base/common/cancellation';
-import { IRemoteAgentService } from 'vs/workbench/services/remote/node/remoteAgentService';
+import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
 import { getManifest } from 'vs/platform/extensionManagement/node/extensionManagementUtil';
 import { ILogService } from 'vs/platform/log/common/log';
 import { areSameExtensions } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
 import { localize } from 'vs/nls';
-import { isUIExtension } from 'vs/platform/extensions/node/extensionsUtil';
+import { isUIExtension } from 'vs/workbench/services/extensions/node/extensionsUtil';
+import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 export class MultiExtensionManagementService extends Disposable implements IExtensionManagementService {
 
@@ -219,3 +220,5 @@ export class MultiExtensionManagementService extends Disposable implements IExte
 		return remoteEnv.syncExtensions;
 	}
 }
+
+registerSingleton(IExtensionManagementService, MultiExtensionManagementService);

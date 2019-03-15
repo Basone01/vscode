@@ -46,7 +46,7 @@ export class ResourceWithCommentThreads {
 
 	public static createCommentNode(resource: URI, commentThread: CommentThread): CommentNode {
 		const { threadId, comments, range } = commentThread;
-		const commentNodes: CommentNode[] = comments.map(comment => new CommentNode(threadId, resource, comment, range));
+		const commentNodes: CommentNode[] = comments.map(comment => new CommentNode(threadId!, resource, comment, range));
 		if (commentNodes.length > 1) {
 			commentNodes[0].replies = commentNodes.slice(1, commentNodes.length);
 		}
@@ -72,10 +72,7 @@ export class CommentsModel {
 	public updateCommentThreads(event: ICommentThreadChangedEvent): boolean {
 		const { owner, removed, changed, added } = event;
 
-		const threadsForOwner = this.commentThreadsMap.get(owner);
-		if (!threadsForOwner) {
-			return false;
-		}
+		let threadsForOwner = this.commentThreadsMap.get(owner) || [];
 
 		removed.forEach(thread => {
 			// Find resource that has the comment thread
@@ -114,7 +111,7 @@ export class CommentsModel {
 					resource.commentThreads.push(ResourceWithCommentThreads.createCommentNode(resource.resource, thread));
 				}
 			} else {
-				threadsForOwner.push(new ResourceWithCommentThreads(URI.parse(thread.resource), [thread]));
+				threadsForOwner.push(new ResourceWithCommentThreads(URI.parse(thread.resource!), [thread]));
 			}
 		});
 
@@ -140,7 +137,7 @@ export class CommentsModel {
 		const resourceCommentThreads: ResourceWithCommentThreads[] = [];
 		const commentThreadsByResource = new Map<string, ResourceWithCommentThreads>();
 		for (const group of groupBy(commentThreads, CommentsModel._compareURIs)) {
-			commentThreadsByResource.set(group[0].resource, new ResourceWithCommentThreads(URI.parse(group[0].resource), group));
+			commentThreadsByResource.set(group[0].resource!, new ResourceWithCommentThreads(URI.parse(group[0].resource!), group));
 		}
 
 		commentThreadsByResource.forEach((v, i, m) => {
@@ -151,8 +148,8 @@ export class CommentsModel {
 	}
 
 	private static _compareURIs(a: CommentThread, b: CommentThread) {
-		const resourceA = a.resource.toString();
-		const resourceB = b.resource.toString();
+		const resourceA = a.resource!.toString();
+		const resourceB = b.resource!.toString();
 		if (resourceA < resourceB) {
 			return -1;
 		} else if (resourceA > resourceB) {

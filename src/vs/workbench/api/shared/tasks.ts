@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UriComponents } from 'vs/base/common/uri';
-import { IExtensionDescription } from 'vs/workbench/services/extensions/common/extensions';
+import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 
 export interface TaskDefinitionDTO {
 	type: string;
@@ -66,6 +66,10 @@ export interface ShellExecutionDTO {
 	options?: ShellExecutionOptionsDTO;
 }
 
+export interface CustomExecutionDTO {
+	customExecution: 'customExecution';
+}
+
 export interface TaskSourceDTO {
 	label: string;
 	extensionId?: string;
@@ -80,7 +84,7 @@ export interface TaskHandleDTO {
 export interface TaskDTO {
 	_id: string;
 	name?: string;
-	execution?: ProcessExecutionDTO | ShellExecutionDTO;
+	execution: ProcessExecutionDTO | ShellExecutionDTO | CustomExecutionDTO | undefined;
 	definition: TaskDefinitionDTO;
 	isBackground?: boolean;
 	source: TaskSourceDTO;
@@ -98,7 +102,7 @@ export interface TaskSetDTO {
 
 export interface TaskExecutionDTO {
 	id: string;
-	task: TaskDTO;
+	task: TaskDTO | undefined;
 }
 
 export interface TaskProcessStartedDTO {

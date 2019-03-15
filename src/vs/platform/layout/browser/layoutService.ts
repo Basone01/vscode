@@ -23,8 +23,19 @@ export interface ILayoutService {
 	readonly dimension: IDimension;
 
 	/**
+	 * Container of the application.
+	 */
+	readonly container: HTMLElement;
+
+	/**
 	 * An event that is emitted when the container is layed out. The
 	 * event carries the dimensions of the container as part of it.
 	 */
 	readonly onLayout: Event<IDimension>;
+
+
+	/**
+	 * Indicates if the layout has a workbench surrounding the editor
+	 */
+	readonly hasWorkbench: boolean;
 }
