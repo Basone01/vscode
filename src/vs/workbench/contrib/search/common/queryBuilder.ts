@@ -18,6 +18,7 @@ import { IConfigurationService } from 'vs/platform/configuration/common/configur
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { getExcludes, ICommonQueryProps, IFileQuery, IFolderQuery, IPatternInfo, ISearchConfiguration, ITextQuery, ITextSearchPreviewOptions, pathIncludedInQuery, QueryType } from 'vs/workbench/services/search/common/search';
+import { Schemas } from 'vs/base/common/network';
 
 /**
  * One folder to search and a glob expression that should be applied.
@@ -229,7 +230,7 @@ export class QueryBuilder {
 	parseSearchPaths(pattern: string): ISearchPathsInfo {
 		const isSearchPath = (segment: string) => {
 			// A segment is a search path if it is an absolute path or starts with ./, ../, .\, or ..\
-			return path.isAbsolute(segment) || /^\.\.?[\/\\]/.test(segment);
+			return path.isAbsolute(segment) || /^\.\.?([\/\\]|$)/.test(segment);
 		};
 
 		const segments = splitGlobPattern(pattern)
@@ -320,6 +321,13 @@ export class QueryBuilder {
 	 */
 	private expandOneSearchPath(searchPath: string): IOneSearchPathPattern[] {
 		if (path.isAbsolute(searchPath)) {
+			const workspaceFolders = this.workspaceContextService.getWorkspace().folders;
+			if (workspaceFolders[0] && workspaceFolders[0].uri.scheme !== Schemas.file) {
+				return [{
+					searchPath: workspaceFolders[0].uri.with({ path: searchPath })
+				}];
+			}
+
 			// Currently only local resources can be searched for with absolute search paths.
 			// TODO convert this to a workspace folder + pattern, so excludes will be resolved properly for an absolute path inside a workspace folder
 			return [{
@@ -331,7 +339,7 @@ export class QueryBuilder {
 			const workspaceUri = this.workspaceContextService.getWorkspace().folders[0].uri;
 
 			searchPath = normalizeSlashes(searchPath);
-			if (strings.startsWith(searchPath, '../')) {
+			if (strings.startsWith(searchPath, '../') || searchPath === '..') {
 				const resolvedPath = path.posix.resolve(workspaceUri.path, searchPath);
 				return [{
 					searchPath: workspaceUri.with({ path: resolvedPath })

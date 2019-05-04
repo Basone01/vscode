@@ -47,6 +47,7 @@ import { ICodeEditorService } from 'vs/editor/browser/services/codeEditorService
 import { IEditorGroupView } from 'vs/workbench/browser/parts/editor/editor';
 import { onDidChangeZoomLevel } from 'vs/base/browser/browser';
 import { withNullAsUndefined, withUndefinedAsNull } from 'vs/base/common/types';
+import { ILabelService } from 'vs/platform/label/common/label';
 
 class Item extends BreadcrumbsItem {
 
@@ -167,6 +168,7 @@ export class BreadcrumbsControl {
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IFileService private readonly _fileService: IFileService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+		@ILabelService private readonly _labelService: ILabelService,
 		@IBreadcrumbsService breadcrumbsService: IBreadcrumbsService,
 	) {
 		this.domNode = document.createElement('div');
@@ -238,16 +240,18 @@ export class BreadcrumbsControl {
 		this._ckBreadcrumbsVisible.set(true);
 		this._ckBreadcrumbsPossible.set(true);
 
-		let editor = this._getActiveCodeEditor();
-		let model = new EditorBreadcrumbsModel(input.getResource()!, editor, this._workspaceService, this._configurationService);
+		const uri = input.getResource()!;
+		const editor = this._getActiveCodeEditor();
+		const model = new EditorBreadcrumbsModel(uri, editor, this._workspaceService, this._configurationService);
 		dom.toggleClass(this.domNode, 'relative-path', model.isRelative());
+		dom.toggleClass(this.domNode, 'backslash-path', this._labelService.getSeparator(uri.scheme, uri.authority) === '\\');
 
-		let updateBreadcrumbs = () => {
-			let items = model.getElements().map(element => new Item(element, this._options, this._instantiationService));
+		const updateBreadcrumbs = () => {
+			const items = model.getElements().map(element => new Item(element, this._options, this._instantiationService));
 			this._widget.setItems(items);
 			this._widget.reveal(items[items.length - 1]);
 		};
-		let listener = model.onDidUpdate(updateBreadcrumbs);
+		const listener = model.onDidUpdate(updateBreadcrumbs);
 		updateBreadcrumbs();
 		this._breadcrumbsDisposables = [model, listener];
 
@@ -336,7 +340,12 @@ export class BreadcrumbsControl {
 						editorViewState = undefined;
 					}
 					this._contextViewService.hideContextView(this);
-					this._revealInEditor(event, data.target, this._getEditorGroup(data.payload && data.payload.originalEvent), (data.payload && data.payload.originalEvent && data.payload.originalEvent.middleButton));
+
+					const group = (picker.useAltAsMultipleSelectionModifier && (data.browserEvent as MouseEvent).metaKey) || (!picker.useAltAsMultipleSelectionModifier && (data.browserEvent as MouseEvent).altKey)
+						? SIDE_GROUP
+						: ACTIVE_GROUP;
+
+					this._revealInEditor(event, data.target, group, (data.browserEvent as MouseEvent).button === 1);
 					/* __GDPR__
 						"breadcrumbs/open" : {
 							"type": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
@@ -464,10 +473,10 @@ export class BreadcrumbsControl {
 		}
 	}
 
-	private _getEditorGroup(data: StandardMouseEvent | object): SIDE_GROUP_TYPE | ACTIVE_GROUP_TYPE | undefined {
-		if (data === BreadcrumbsControl.Payload_RevealAside || (data instanceof StandardMouseEvent && data.altKey)) {
+	private _getEditorGroup(data: object): SIDE_GROUP_TYPE | ACTIVE_GROUP_TYPE | undefined {
+		if (data === BreadcrumbsControl.Payload_RevealAside) {
 			return SIDE_GROUP;
-		} else if (data === BreadcrumbsControl.Payload_Reveal || (data instanceof StandardMouseEvent && data.metaKey)) {
+		} else if (data === BreadcrumbsControl.Payload_Reveal) {
 			return ACTIVE_GROUP;
 		} else {
 			return undefined;

@@ -209,6 +209,10 @@ export class TypeScriptServerSpawner {
 			args.push('--noGetErrOnBackgroundUpdate');
 		}
 
+		if (apiVersion.gte(API.v345)) {
+			args.push('--validateDefaultNpmLocation');
+		}
+
 		return { args, cancellationPipeName, tsServerLogFile };
 	}
 
@@ -458,7 +462,7 @@ export class TypeScriptServer extends Disposable {
 	}
 }
 
-const fenceCommands = new Set(['change', 'close', 'open']);
+const fenceCommands = new Set(['change', 'close', 'open', 'updateOpen']);
 
 function getQueueingType(
 	command: string,

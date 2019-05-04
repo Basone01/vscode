@@ -4,10 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event, Emitter } from 'vs/base/common/event';
-import { ITerminalService, ITerminalProcessExtHostProxy, IShellLaunchConfig, ITerminalChildProcess } from 'vs/workbench/contrib/terminal/common/terminal';
+import { ITerminalService, ITerminalProcessExtHostProxy, IShellLaunchConfig, ITerminalChildProcess, ITerminalConfigHelper } from 'vs/workbench/contrib/terminal/common/terminal';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { URI } from 'vs/base/common/uri';
-import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
+import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
+import * as nls from 'vs/nls';
+
+let hasReceivedResponse: boolean = false;
 
 export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerminalProcessExtHostProxy {
 	private _disposables: IDisposable[] = [];
@@ -31,9 +34,12 @@ export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerm
 	public get onRequestInitialCwd(): Event<void> { return this._onRequestInitialCwd.event; }
 	private readonly _onRequestCwd = new Emitter<void>();
 	public get onRequestCwd(): Event<void> { return this._onRequestCwd.event; }
+	private readonly _onRequestLatency = new Emitter<void>();
+	public get onRequestLatency(): Event<void> { return this._onRequestLatency.event; }
 
 	private _pendingInitialCwdRequests: ((value?: string | Thenable<string>) => void)[] = [];
 	private _pendingCwdRequests: ((value?: string | Thenable<string>) => void)[] = [];
+	private _pendingLatencyRequests: ((value?: number | Thenable<number>) => void)[] = [];
 
 	constructor(
 		public terminalId: number,
@@ -41,15 +47,19 @@ export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerm
 		activeWorkspaceRootUri: URI,
 		cols: number,
 		rows: number,
+		configHelper: ITerminalConfigHelper,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@IExtensionService private readonly _extensionService: IExtensionService
+		@IRemoteAgentService readonly remoteAgentService: IRemoteAgentService
 	) {
-		this._extensionService.whenInstalledExtensionsRegistered().then(() => {
-			// TODO: MainThreadTerminalService is not ready at this point, fix this
-			setTimeout(() => {
-				this._terminalService.requestExtHostProcess(this, shellLaunchConfig, activeWorkspaceRootUri, cols, rows);
-			}, 0);
+		remoteAgentService.getEnvironment().then(env => {
+			if (!env) {
+				throw new Error('Could not fetch environment');
+			}
+			this._terminalService.requestExtHostProcess(this, shellLaunchConfig, activeWorkspaceRootUri, cols, rows, configHelper.checkWorkspaceShellPermissions(env.os));
 		});
+		if (!hasReceivedResponse) {
+			setTimeout(() => this._onProcessTitleChanged.fire(nls.localize('terminal.integrated.starting', "Starting...")), 0);
+		}
 	}
 
 	public dispose(): void {
@@ -62,6 +72,7 @@ export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerm
 	}
 
 	public emitTitle(title: string): void {
+		hasReceivedResponse = true;
 		this._onProcessTitleChanged.fire(title);
 	}
 
@@ -83,6 +94,12 @@ export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerm
 	public emitCwd(cwd: string): void {
 		while (this._pendingCwdRequests.length > 0) {
 			this._pendingCwdRequests.pop()!(cwd);
+		}
+	}
+
+	public emitLatency(latency: number): void {
+		while (this._pendingLatencyRequests.length > 0) {
+			this._pendingLatencyRequests.pop()!(latency);
 		}
 	}
 
@@ -109,6 +126,13 @@ export class TerminalProcessExtHostProxy implements ITerminalChildProcess, ITerm
 		return new Promise<string>(resolve => {
 			this._onRequestCwd.fire();
 			this._pendingCwdRequests.push(resolve);
+		});
+	}
+
+	public getLatency(): Promise<number> {
+		return new Promise<number>(resolve => {
+			this._onRequestLatency.fire();
+			this._pendingLatencyRequests.push(resolve);
 		});
 	}
 }

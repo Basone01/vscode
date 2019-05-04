@@ -4,21 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as arrays from 'vs/base/common/arrays';
-import { isArray } from 'vs/base/common/types';
+import { isFalsyOrWhitespace } from 'vs/base/common/strings';
+import { isArray, withUndefinedAsNull } from 'vs/base/common/types';
 import { URI } from 'vs/base/common/uri';
 import { localize } from 'vs/nls';
 import { ConfigurationTarget, IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ConfigurationScope } from 'vs/platform/configuration/common/configurationRegistry';
 import { SettingsTarget } from 'vs/workbench/contrib/preferences/browser/preferencesWidgets';
 import { ITOCEntry, knownAcronyms } from 'vs/workbench/contrib/preferences/browser/settingsLayout';
-import { IExtensionSetting, ISearchResult, ISetting, SettingValueType } from 'vs/workbench/services/preferences/common/preferences';
 import { MODIFIED_SETTING_TAG } from 'vs/workbench/contrib/preferences/common/preferences';
+import { IExtensionSetting, ISearchResult, ISetting, SettingValueType } from 'vs/workbench/services/preferences/common/preferences';
 
 export const ONLINE_SERVICES_SETTING_TAG = 'usesOnlineServices';
 
 export interface ISettingsEditorViewState {
 	settingsTarget: SettingsTarget;
 	tagFilters?: Set<string>;
+	extensionFilters?: Set<string>;
 	filterToCategory?: SettingsTreeGroupElement;
 }
 
@@ -140,11 +142,15 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 
 		const displayValue = isConfigured ? inspected[targetSelector] : inspected.default;
 		const overriddenScopeList: string[] = [];
-		if (targetSelector === 'user' && typeof inspected.workspace !== 'undefined') {
+		if (targetSelector !== 'workspace' && typeof inspected.workspace !== 'undefined') {
 			overriddenScopeList.push(localize('workspace', "Workspace"));
 		}
 
-		if (targetSelector === 'workspace' && typeof inspected.user !== 'undefined') {
+		if (targetSelector !== 'userRemote' && typeof inspected.userRemote !== 'undefined') {
+			overriddenScopeList.push(localize('remote', "Remote"));
+		}
+
+		if (targetSelector !== 'userLocal' && typeof inspected.userLocal !== 'undefined') {
 			overriddenScopeList.push(localize('user', "User"));
 		}
 
@@ -226,7 +232,29 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 			return this.setting.scope === ConfigurationScope.WINDOW || this.setting.scope === ConfigurationScope.RESOURCE;
 		}
 
+		if (configTarget === ConfigurationTarget.USER_REMOTE) {
+			return this.setting.scope === ConfigurationScope.MACHINE || this.setting.scope === ConfigurationScope.WINDOW || this.setting.scope === ConfigurationScope.RESOURCE;
+		}
+
 		return true;
+	}
+
+	matchesAnyExtension(extensionFilters?: Set<string>): boolean {
+		if (!extensionFilters || !extensionFilters.size) {
+			return true;
+		}
+
+		if (!this.setting.extensionInfo) {
+			return false;
+		}
+
+		for (let extensionId of extensionFilters) {
+			if (extensionId.toLowerCase() === this.setting.extensionInfo.id.toLowerCase()) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
 
@@ -262,11 +290,11 @@ export class SettingsTreeModel {
 	}
 
 	getElementById(id: string): SettingsTreeElement | null {
-		return this._treeElementsById.get(id) || null;
+		return withUndefinedAsNull(this._treeElementsById.get(id));
 	}
 
 	getElementsByName(name: string): SettingsTreeSettingElement[] | null {
-		return this._treeElementsBySettingName.get(name) || null;
+		return withUndefinedAsNull(this._treeElementsBySettingName.get(name));
 	}
 
 	updateElementsByName(name: string): void {
@@ -330,16 +358,26 @@ export class SettingsTreeModel {
 
 interface IInspectResult {
 	isConfigured: boolean;
-	inspected: any;
-	targetSelector: string;
+	inspected: {
+		default: any,
+		user: any,
+		userLocal?: any,
+		userRemote?: any,
+		workspace?: any,
+		workspaceFolder?: any,
+		memory?: any,
+		value: any,
+	};
+	targetSelector: 'userLocal' | 'userRemote' | 'workspace' | 'workspaceFolder';
 }
 
 function inspectSetting(key: string, target: SettingsTarget, configurationService: IConfigurationService): IInspectResult {
 	const inspectOverrides = URI.isUri(target) ? { resource: target } : undefined;
 	const inspected = configurationService.inspect(key, inspectOverrides);
-	const targetSelector = target === ConfigurationTarget.USER ? 'user' :
-		target === ConfigurationTarget.WORKSPACE ? 'workspace' :
-			'workspaceFolder';
+	const targetSelector = target === ConfigurationTarget.USER_LOCAL ? 'userLocal' :
+		target === ConfigurationTarget.USER_REMOTE ? 'userRemote' :
+			target === ConfigurationTarget.WORKSPACE ? 'workspace' :
+				'workspaceFolder';
 	const isConfigured = typeof inspected[targetSelector] !== 'undefined';
 
 	return { isConfigured, inspected, targetSelector };
@@ -378,7 +416,7 @@ function wordifyKey(key: string): string {
 }
 
 function trimCategoryForGroup(category: string, groupId: string): string {
-	const doTrim = forward => {
+	const doTrim = (forward: boolean) => {
 		const parts = groupId.split('.');
 		while (parts.length) {
 			const reg = new RegExp(`^${parts.join('\\.')}(\\.|$)`, 'i');
@@ -494,7 +532,7 @@ export class SearchResultModel extends SettingsTreeModel {
 
 		// Save time, filter children in the search model instead of relying on the tree filter, which still requires heights to be calculated.
 		this.root.children = this.root.children
-			.filter(child => child instanceof SettingsTreeSettingElement && child.matchesAllTags(this._viewState.tagFilters) && child.matchesScope(this._viewState.settingsTarget));
+			.filter(child => child instanceof SettingsTreeSettingElement && child.matchesAllTags(this._viewState.tagFilters) && child.matchesScope(this._viewState.settingsTarget) && child.matchesAnyExtension(this._viewState.extensionFilters));
 
 		if (this.newExtensionSearchResults && this.newExtensionSearchResults.filterMatches.length) {
 			const newExtElement = new SettingsTreeNewExtensionsElement();
@@ -527,11 +565,14 @@ export class SearchResultModel extends SettingsTreeModel {
 export interface IParsedQuery {
 	tags: string[];
 	query: string;
+	extensionFilters: string[];
 }
 
 const tagRegex = /(^|\s)@tag:("([^"]*)"|[^"]\S*)/g;
+const extensionRegex = /(^|\s)@ext:("([^"]*)"|[^"]\S*)?/g;
 export function parseQuery(query: string): IParsedQuery {
 	const tags: string[] = [];
+	let extensions: string[] = [];
 	query = query.replace(tagRegex, (_, __, quotedTag, tag) => {
 		tags.push(tag || quotedTag);
 		return '';
@@ -542,10 +583,19 @@ export function parseQuery(query: string): IParsedQuery {
 		return '';
 	});
 
+	query = query.replace(extensionRegex, (_, __, quotedExtensionId, extensionId) => {
+		let extensionIdQuery: string = extensionId || quotedExtensionId;
+		if (extensionIdQuery) {
+			extensions.push(...extensionIdQuery.split(',').map(s => s.trim()).filter(s => !isFalsyOrWhitespace(s)));
+		}
+		return '';
+	});
+
 	query = query.trim();
 
 	return {
 		tags,
+		extensionFilters: extensions,
 		query
 	};
 }

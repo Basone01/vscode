@@ -10,7 +10,7 @@ import { IRange } from 'vs/editor/common/core/range';
 import { ITextModel } from 'vs/editor/common/model';
 import { localize } from 'vs/nls';
 import { ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
-import { ConfigurationScope } from 'vs/platform/configuration/common/configurationRegistry';
+import { ConfigurationScope, IConfigurationExtensionInfo } from 'vs/platform/configuration/common/configurationRegistry';
 import { IEditorOptions } from 'vs/platform/editor/common/editor';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
@@ -65,6 +65,7 @@ export interface ISetting {
 	enumDescriptions?: string[];
 	enumDescriptionsAreMarkdown?: boolean;
 	tags?: string[];
+	extensionInfo?: IConfigurationExtensionInfo;
 	validator?: (value: any) => string | null;
 }
 
@@ -132,7 +133,7 @@ export interface IFilterMetadata {
 
 export interface IPreferencesEditorModel<T> {
 	uri?: URI;
-	getPreference(key: string): T | null;
+	getPreference(key: string): T | undefined;
 	dispose(): void;
 }
 
@@ -144,7 +145,7 @@ export interface ISettingsEditorModel extends IPreferencesEditorModel<ISetting> 
 	settingsGroups: ISettingsGroup[];
 	filterSettings(filter: string, groupFilter: IGroupFilter, settingMatcher: ISettingMatcher): ISettingMatch[];
 	findValueMatches(filter: string, setting: ISetting): IRange[];
-	updateResultGroup(id: string, resultGroup: ISearchResultGroup): IFilterResult | null;
+	updateResultGroup(id: string, resultGroup: ISearchResultGroup | undefined): IFilterResult | undefined;
 }
 
 export interface ISettingsEditorOptions extends IEditorOptions {
@@ -199,8 +200,9 @@ export interface IPreferencesService {
 	createSettings2EditorModel(): Settings2EditorModel; // TODO
 
 	openRawDefaultSettings(): Promise<IEditor | null>;
-	openSettings(jsonEditor?: boolean): Promise<IEditor | null>;
+	openSettings(jsonEditor: boolean | undefined, query: string | undefined): Promise<IEditor | null>;
 	openGlobalSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
+	openRemoteSettings(): Promise<IEditor | null>;
 	openWorkspaceSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
 	openFolderSettings(folder: URI, jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
 	switchSettings(target: ConfigurationTarget, resource: URI, jsonEditor?: boolean): Promise<void>;
@@ -213,6 +215,7 @@ export interface IPreferencesService {
 export function getSettingsTargetName(target: ConfigurationTarget, resource: URI, workspaceContextService: IWorkspaceContextService): string {
 	switch (target) {
 		case ConfigurationTarget.USER:
+		case ConfigurationTarget.USER_LOCAL:
 			return localize('userSettingsTarget', "User Settings");
 		case ConfigurationTarget.WORKSPACE:
 			return localize('workspaceSettingsTarget', "Workspace Settings");

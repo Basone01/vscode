@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import * as pfs from 'vs/base/node/pfs';
 import * as platform from 'vs/base/common/platform';
 import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
@@ -20,13 +19,16 @@ import { getDefaultShell, linuxDistro, getWindowsBuildNumber } from 'vs/workbenc
 import { IDialogService } from 'vs/platform/dialogs/common/dialogs';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { ipcRenderer as ipc } from 'electron';
-import { IOpenFileRequest, IWindowService } from 'vs/platform/windows/common/windows';
+import { IOpenFileRequest } from 'vs/platform/windows/common/windows';
+import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
 import { IQuickInputService, IQuickPickItem, IPickOptions } from 'vs/platform/quickinput/common/quickInput';
 import { coalesce } from 'vs/base/common/arrays';
 import { IFileService } from 'vs/platform/files/common/files';
 import { escapeNonWindowsPath } from 'vs/workbench/contrib/terminal/common/terminalEnvironment';
 import { execFile } from 'child_process';
+import { URI } from 'vs/base/common/uri';
+import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
 
 export class TerminalService extends BrowserTerminalService implements ITerminalService {
 	public get configHelper(): ITerminalConfigHelper { return this._configHelper; }
@@ -43,10 +45,11 @@ export class TerminalService extends BrowserTerminalService implements ITerminal
 		@INotificationService notificationService: INotificationService,
 		@IDialogService dialogService: IDialogService,
 		@IExtensionService extensionService: IExtensionService,
-		@IWindowService windowService: IWindowService,
-		@IFileService fileService: IFileService
+		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
+		@IFileService fileService: IFileService,
+		@IRemoteAgentService remoteAgentService: IRemoteAgentService
 	) {
-		super(contextKeyService, panelService, layoutService, lifecycleService, storageService, notificationService, dialogService, instantiationService, windowService, extensionService, fileService);
+		super(contextKeyService, panelService, layoutService, lifecycleService, storageService, notificationService, dialogService, instantiationService, environmentService, extensionService, fileService, remoteAgentService);
 
 		this._configHelper = this._instantiationService.createInstance(TerminalConfigHelper, linuxDistro);
 		ipc.on('vscode:openFiles', (_event: any, request: IOpenFileRequest) => {
@@ -54,7 +57,8 @@ export class TerminalService extends BrowserTerminalService implements ITerminal
 			// the termProgram variable) and we are instructed to wait for editors close, wait for the
 			// marker file to get deleted and then focus back to the integrated terminal.
 			if (request.termProgram === 'vscode' && request.filesToWait) {
-				pfs.whenDeleted(request.filesToWait.waitMarkerFilePath).then(() => {
+				const waitMarkerFileUri = URI.revive(request.filesToWait.waitMarkerFileUri);
+				this.whenDeleted(waitMarkerFileUri).then(() => {
 					if (this.terminalInstances.length > 0) {
 						const terminal = this.getActiveInstance();
 						if (terminal) {
@@ -70,6 +74,27 @@ export class TerminalService extends BrowserTerminalService implements ITerminal
 				return;
 			}
 			activeTab.terminalInstances.forEach(instance => instance.forceRedraw());
+		});
+	}
+
+	private whenDeleted(path: URI): Promise<void> {
+
+		// Complete when wait marker file is deleted
+		return new Promise<void>(resolve => {
+			let running = false;
+			const interval = setInterval(() => {
+				if (!running) {
+					running = true;
+					this._fileService.exists(path).then(exists => {
+						running = false;
+
+						if (!exists) {
+							clearInterval(interval);
+							resolve(undefined);
+						}
+					});
+				}
+			}, 1000);
 		});
 	}
 

@@ -460,6 +460,11 @@ export interface CompletionItem {
 	 * A command that should be run upon acceptance of this item.
 	 */
 	command?: Command;
+
+	/**
+	 * @internal
+	 */
+	[key: string]: any;
 }
 
 export interface CompletionList {
@@ -929,6 +934,8 @@ export interface DocumentFormattingEditProvider {
 	 */
 	readonly extensionId?: ExtensionIdentifier;
 
+	readonly displayName?: string;
+
 	/**
 	 * Provide formatting edits for a whole document.
 	 */
@@ -939,12 +946,12 @@ export interface DocumentFormattingEditProvider {
  * the formatting-feature.
  */
 export interface DocumentRangeFormattingEditProvider {
-
-
 	/**
 	 * @internal
 	 */
 	readonly extensionId?: ExtensionIdentifier;
+
+	readonly displayName?: string;
 
 	/**
 	 * Provide formatting edits for a range in a document.
@@ -994,11 +1001,16 @@ export interface ILink {
 	range: IRange;
 	url?: URI | string;
 }
+
+export interface ILinksList {
+	links: ILink[];
+	dispose?(): void;
+}
 /**
  * A provider of links.
  */
 export interface LinkProvider {
-	provideLinks(model: model.ITextModel, token: CancellationToken): ProviderResult<ILink[]>;
+	provideLinks(model: model.ITextModel, token: CancellationToken): ProviderResult<ILinksList>;
 	resolveLink?: (link: ILink, token: CancellationToken) => ProviderResult<ILink>;
 }
 
@@ -1202,12 +1214,24 @@ export interface Command {
 /**
  * @internal
  */
+export interface CommentThreadTemplate {
+	controllerHandle: number;
+	label: string;
+	acceptInputCommand?: Command;
+	additionalCommands?: Command[];
+	deleteCommand?: Command;
+}
+
+/**
+ * @internal
+ */
 export interface CommentInfo {
 	extensionId?: string;
 	threads: CommentThread[];
 	commentingRanges?: (IRange[] | CommentingRanges);
 	reply?: Command;
 	draftMode?: DraftMode;
+	template?: CommentThreadTemplate;
 }
 
 /**
@@ -1258,23 +1282,26 @@ export interface CommentInput {
  */
 export interface CommentThread2 {
 	commentThreadHandle: number;
+	controllerHandle: number;
 	extensionId?: string;
 	threadId: string | null;
 	resource: string | null;
 	range: IRange;
 	label: string;
-	comments: Comment[];
-	onDidChangeComments: Event<Comment[]>;
+	comments: Comment[] | undefined;
+	onDidChangeComments: Event<Comment[] | undefined>;
 	collapsibleState?: CommentThreadCollapsibleState;
 	input?: CommentInput;
 	onDidChangeInput: Event<CommentInput | undefined>;
 	acceptInputCommand?: Command;
-	additionalCommands: Command[];
-	onDidChangeAcceptInputCommand: Event<Command>;
-	onDidChangeAdditionalCommands: Event<Command[]>;
+	additionalCommands?: Command[];
+	deleteCommand?: Command;
+	onDidChangeAcceptInputCommand: Event<Command | undefined>;
+	onDidChangeAdditionalCommands: Event<Command[] | undefined>;
 	onDidChangeRange: Event<IRange>;
 	onDidChangeLabel: Event<string>;
-	onDidChangeCollasibleState: Event<CommentThreadCollapsibleState>;
+	onDidChangeCollasibleState: Event<CommentThreadCollapsibleState | undefined>;
+	isDisposed: boolean;
 }
 
 /**
@@ -1284,8 +1311,7 @@ export interface CommentThread2 {
 export interface CommentingRanges {
 	readonly resource: URI;
 	ranges: IRange[];
-	newCommentThreadCommand?: Command;
-	newCommentThreadCallback?: (uri: UriComponents, range: IRange) => void;
+	newCommentThreadCallback?: (uri: UriComponents, range: IRange) => Promise<CommentThread | undefined>;
 }
 
 /**
@@ -1296,9 +1322,10 @@ export interface CommentThread {
 	threadId: string | null;
 	resource: string | null;
 	range: IRange;
-	comments: Comment[];
+	comments: Comment[] | undefined;
 	collapsibleState?: CommentThreadCollapsibleState;
 	reply?: Command;
+	isDisposed?: boolean;
 }
 
 /**
@@ -1393,6 +1420,32 @@ export interface DocumentCommentProvider {
 export interface WorkspaceCommentProvider {
 	provideWorkspaceComments(token: CancellationToken): Promise<CommentThread[]>;
 	onDidChangeCommentThreads(): Event<CommentThreadChangedEvent>;
+}
+
+/**
+ * @internal
+ */
+export interface IWebviewPortMapping {
+	webviewPort: number;
+	extensionHostPort: number;
+}
+
+/**
+ * @internal
+ */
+export interface IWebviewOptions {
+	readonly enableScripts?: boolean;
+	readonly enableCommandUris?: boolean;
+	readonly localResourceRoots?: ReadonlyArray<URI>;
+	readonly portMapping?: ReadonlyArray<IWebviewPortMapping>;
+}
+
+/**
+ * @internal
+ */
+export interface IWebviewPanelOptions {
+	readonly enableFindWidget?: boolean;
+	readonly retainContextWhenHidden?: boolean;
 }
 
 export interface ICodeLensSymbol {
@@ -1546,9 +1599,9 @@ export interface ITokenizationRegistry {
 
 	/**
 	 * Get the tokenization support for a language.
-	 * Returns null if not found.
+	 * Returns `null` if not found.
 	 */
-	get(language: string): ITokenizationSupport;
+	get(language: string): ITokenizationSupport | null;
 
 	/**
 	 * Get the promise of a tokenization support for a language.

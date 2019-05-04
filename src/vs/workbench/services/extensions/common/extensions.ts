@@ -10,6 +10,7 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 import { IExtensionPoint } from 'vs/workbench/services/extensions/common/extensionsRegistry';
 import { ExtensionIdentifier, IExtension, ExtensionType, IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 import { getGalleryExtensionId } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
+import { IMessagePassingProtocol } from 'vs/base/parts/ipc/common/ipc';
 
 export const nullExtensionDescription = Object.freeze(<IExtensionDescription>{
 	identifier: new ExtensionIdentifier('nullExtensionDescription'),
@@ -82,6 +83,14 @@ export interface IExtensionHostProfile {
 	getAggregatedTimes(): Map<ProfileSegmentId, number>;
 }
 
+export interface IExtensionHostStarter {
+	readonly onCrashed: Event<[number, string | null]>;
+	start(): Promise<IMessagePassingProtocol> | null;
+	getInspectPort(): number | undefined;
+	dispose(): void;
+}
+
+
 /**
  * Extension id or one of the four known program states.
  */
@@ -116,11 +125,10 @@ export interface IWillActivateEvent {
 }
 
 export interface IResponsiveStateChangeEvent {
-	target: ICpuProfilerTarget;
 	isResponsive: boolean;
 }
 
-export interface IExtensionService extends ICpuProfilerTarget {
+export interface IExtensionService {
 	_serviceBrand: any;
 
 	/**
@@ -200,7 +208,8 @@ export interface IExtensionService extends ICpuProfilerTarget {
 	getExtensionsStatus(): { [id: string]: IExtensionsStatus };
 
 	/**
-	 * Return the inspect port or 0.
+	 * Return the inspect port or `0`, the latter means inspection
+	 * is not possible.
 	 */
 	getInspectPort(): number;
 
@@ -218,19 +227,13 @@ export interface IExtensionService extends ICpuProfilerTarget {
 	 * Stops the extension host.
 	 */
 	stopExtensionHost(): void;
-}
 
-export interface ICpuProfilerTarget {
-
-	/**
-	 * Check if the extension host can be profiled.
-	 */
-	canProfileExtensionHost(): boolean;
-
-	/**
-	 * Begin an extension host process profile session.
-	 */
-	startExtensionHostProfile(): Promise<ProfileSession>;
+	_logOrShowMessage(severity: Severity, msg: string): void;
+	_activateById(extensionId: ExtensionIdentifier, activationEvent: string): Promise<void>;
+	_onWillActivateExtension(extensionId: ExtensionIdentifier): void;
+	_onDidActivateExtension(extensionId: ExtensionIdentifier, startup: boolean, codeLoadingTime: number, activateCallTime: number, activateResolvedTime: number, activationEvent: string): void;
+	_onExtensionRuntimeError(extensionId: ExtensionIdentifier, err: Error): void;
+	_onExtensionHostExit(code: number): void;
 }
 
 export interface ProfileSession {
@@ -270,12 +273,16 @@ export class NullExtensionService implements IExtensionService {
 	getExtension() { return Promise.resolve(undefined); }
 	readExtensionPointContributions<T>(_extPoint: IExtensionPoint<T>): Promise<ExtensionPointContribution<T>[]> { return Promise.resolve(Object.create(null)); }
 	getExtensionsStatus(): { [id: string]: IExtensionsStatus; } { return Object.create(null); }
-	canProfileExtensionHost(): boolean { return false; }
 	getInspectPort(): number { return 0; }
-	startExtensionHostProfile(): Promise<ProfileSession> { return Promise.resolve(Object.create(null)); }
 	restartExtensionHost(): void { }
 	startExtensionHost(): void { }
 	stopExtensionHost(): void { }
 	canAddExtension(): boolean { return false; }
 	canRemoveExtension(): boolean { return false; }
+	_logOrShowMessage(_severity: Severity, _msg: string): void { }
+	_activateById(_extensionId: ExtensionIdentifier, _activationEvent: string): Promise<void> { return Promise.resolve(); }
+	_onWillActivateExtension(_extensionId: ExtensionIdentifier): void { }
+	_onDidActivateExtension(_extensionId: ExtensionIdentifier, _startup: boolean, _codeLoadingTime: number, _activateCallTime: number, _activateResolvedTime: number, _activationEvent: string): void { }
+	_onExtensionRuntimeError(_extensionId: ExtensionIdentifier, _err: Error): void { }
+	_onExtensionHostExit(code: number): void { }
 }

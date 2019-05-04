@@ -5,7 +5,7 @@
 
 import { Event } from 'vs/base/common/event';
 import { IChannel } from 'vs/base/parts/ipc/common/ipc';
-import { IWindowsService, INativeOpenDialogOptions, IEnterWorkspaceResult, CrashReporterStartOptions, IMessageBoxResult, MessageBoxOptions, SaveDialogOptions, OpenDialogOptions, IDevToolsOptions, INewWindowOptions, IURIToOpen } from 'vs/platform/windows/common/windows';
+import { IWindowsService, INativeOpenDialogOptions, IEnterWorkspaceResult, CrashReporterStartOptions, IMessageBoxResult, MessageBoxOptions, SaveDialogOptions, OpenDialogOptions, IDevToolsOptions, INewWindowOptions, IURIToOpen, IOpenSettings } from 'vs/platform/windows/common/windows';
 import { IWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier, reviveWorkspaceIdentifier } from 'vs/platform/workspaces/common/workspaces';
 import { IRecentlyOpened, IRecent, isRecentWorkspace } from 'vs/platform/history/common/history';
 import { ISerializableCommandAction } from 'vs/platform/actions/common/actions';
@@ -74,9 +74,11 @@ export class WindowsService implements IWindowsService {
 		return this.channel.call('closeWorkspace', windowId);
 	}
 
-	enterWorkspace(windowId: number, path: URI): Promise<IEnterWorkspaceResult> {
+	enterWorkspace(windowId: number, path: URI): Promise<IEnterWorkspaceResult | undefined> {
 		return this.channel.call('enterWorkspace', [windowId, path]).then((result: IEnterWorkspaceResult) => {
-			result.workspace = reviveWorkspaceIdentifier(result.workspace);
+			if (result) {
+				result.workspace = reviveWorkspaceIdentifier(result.workspace);
+			}
 			return result;
 		});
 	}
@@ -186,16 +188,12 @@ export class WindowsService implements IWindowsService {
 		return this.channel.call('toggleSharedProcess');
 	}
 
-	openWindow(windowId: number, uris: IURIToOpen[], options?: { forceNewWindow?: boolean, forceReuseWindow?: boolean, forceOpenWorkspaceAsFile?: boolean, args?: ParsedArgs }): Promise<void> {
+	openWindow(windowId: number, uris: IURIToOpen[], options: IOpenSettings): Promise<void> {
 		return this.channel.call('openWindow', [windowId, uris, options]);
 	}
 
 	openNewWindow(options?: INewWindowOptions): Promise<void> {
 		return this.channel.call('openNewWindow', options);
-	}
-
-	showWindow(windowId: number): Promise<void> {
-		return this.channel.call('showWindow', windowId);
 	}
 
 	getWindows(): Promise<{ id: number; workspace?: IWorkspaceIdentifier; folderUri?: ISingleFolderWorkspaceIdentifier; title: string; filename?: string; }[]> {

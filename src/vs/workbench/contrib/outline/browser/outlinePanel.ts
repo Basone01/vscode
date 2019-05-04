@@ -368,7 +368,7 @@ export class OutlinePanel extends ViewletPanel {
 
 		this.disposables.push(this.onDidChangeBodyVisibility(visible => {
 			if (visible && !this._requestOracle) {
-				this._requestOracle = this._instantiationService.createInstance(RequestOracle, (editor, event) => this._doUpdate(editor, event), DocumentSymbolProviderRegistry);
+				this._requestOracle = this._instantiationService.createInstance(RequestOracle, (editor: ICodeEditor | undefined, event: IModelContentChangedEvent | undefined) => this._doUpdate(editor, event), DocumentSymbolProviderRegistry);
 			} else if (!visible) {
 				dispose(this._requestOracle);
 				this._requestOracle = undefined;
@@ -456,7 +456,7 @@ export class OutlinePanel extends ViewletPanel {
 		}
 
 		if (!editor || !editor.hasModel() || !DocumentSymbolProviderRegistry.has(editor.getModel())) {
-			return this._showMessage(localize('no-editor', "There are no editors open that can provide outline information."));
+			return this._showMessage(localize('no-editor', "The active editor cannot provide outline information."));
 		}
 
 		let textModel = editor.getModel();

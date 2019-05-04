@@ -36,10 +36,12 @@ suite('workspace-namespace', () => {
 	});
 
 	test('rootPath', () => {
-		if (vscode.workspace.rootPath) {
-			assert.ok(pathEquals(vscode.workspace.rootPath, join(__dirname, '../../testWorkspace')));
-		}
+		assert.ok(pathEquals(vscode.workspace.rootPath!, join(__dirname, '../../testWorkspace')));
 		assert.throws(() => (vscode.workspace as any).rootPath = 'farboo');
+	});
+
+	test('workspaceFile', () => {
+		assert.ok(!vscode.workspace.workspaceFile);
 	});
 
 	test('workspaceFolders', () => {
@@ -75,7 +77,7 @@ suite('workspace-namespace', () => {
 	});
 
 	test('openTextDocument, untitled is dirty', function () {
-		return vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:' + join(vscode.workspace.rootPath || '', './newfile.txt'))).then(doc => {
+		return vscode.workspace.openTextDocument(vscode.Uri.parse('untitled:' + join(vscode.workspace.workspaceFolders![0].uri.toString() || '', './newfile.txt'))).then(doc => {
 			assert.equal(doc.uri.scheme, 'untitled');
 			assert.ok(doc.isDirty);
 		});

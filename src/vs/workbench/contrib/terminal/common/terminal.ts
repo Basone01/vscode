@@ -101,6 +101,8 @@ export interface ITerminalConfiguration {
 	experimentalBufferImpl: 'JsArray' | 'TypedArray';
 	splitCwd: 'workspaceRoot' | 'initial' | 'inherited';
 	windowsEnableConpty: boolean;
+	enableLatencyMitigation: boolean;
+	experimentalRefreshOnResume: boolean;
 }
 
 export interface ITerminalConfigHelper {
@@ -113,7 +115,7 @@ export interface ITerminalConfigHelper {
 	mergeDefaultShellPathAndArgs(shell: IShellLaunchConfig, platformOverride?: platform.Platform): void;
 	/** Sets whether a workspace shell configuration is allowed or not */
 	setWorkspaceShellAllowed(isAllowed: boolean): void;
-	checkWorkspaceShellPermissions(platformOverride?: platform.Platform): boolean;
+	checkWorkspaceShellPermissions(osOverride?: platform.OperatingSystem): boolean;
 }
 
 export interface ITerminalFont {
@@ -265,7 +267,8 @@ export interface ITerminalService {
 	 */
 	preparePathForTerminalAsync(path: string, executable: string | undefined, title: string): Promise<string>;
 
-	requestExtHostProcess(proxy: ITerminalProcessExtHostProxy, shellLaunchConfig: IShellLaunchConfig, activeWorkspaceRootUri: URI, cols: number, rows: number): void;
+	extHostReady(remoteAuthority: string): void;
+	requestExtHostProcess(proxy: ITerminalProcessExtHostProxy, shellLaunchConfig: IShellLaunchConfig, activeWorkspaceRootUri: URI, cols: number, rows: number, isWorkspaceShellAllowed: boolean): void;
 }
 
 export const enum Direction {
@@ -633,6 +636,14 @@ export interface ITerminalCommandTracker {
 	selectToNextLine(): void;
 }
 
+export interface IBeforeProcessDataEvent {
+	/**
+	 * The data of the event, this can be modified by the event listener to change what gets sent
+	 * to the terminal.
+	 */
+	data: string;
+}
+
 export interface ITerminalProcessManager extends IDisposable {
 	readonly processState: ProcessState;
 	readonly ptyProcessReady: Promise<void>;
@@ -642,18 +653,20 @@ export interface ITerminalProcessManager extends IDisposable {
 	readonly userHome: string | undefined;
 
 	readonly onProcessReady: Event<void>;
+	readonly onBeforeProcessData: Event<IBeforeProcessDataEvent>;
 	readonly onProcessData: Event<string>;
 	readonly onProcessTitle: Event<string>;
 	readonly onProcessExit: Event<number>;
 
-	addDisposable(disposable: IDisposable);
-	dispose(immediate?: boolean);
-	createProcess(shellLaunchConfig: IShellLaunchConfig, cols: number, rows: number);
+	addDisposable(disposable: IDisposable): void;
+	dispose(immediate?: boolean): void;
+	createProcess(shellLaunchConfig: IShellLaunchConfig, cols: number, rows: number): void;
 	write(data: string): void;
 	setDimensions(cols: number, rows: number): void;
 
 	getInitialCwd(): Promise<string>;
 	getCwd(): Promise<string>;
+	getLatency(): Promise<number>;
 }
 
 export const enum ProcessState {
@@ -685,12 +698,14 @@ export interface ITerminalProcessExtHostProxy extends IDisposable {
 	emitExit(exitCode: number): void;
 	emitInitialCwd(initialCwd: string): void;
 	emitCwd(cwd: string): void;
+	emitLatency(latency: number): void;
 
 	onInput: Event<string>;
 	onResize: Event<{ cols: number, rows: number }>;
 	onShutdown: Event<boolean>;
 	onRequestInitialCwd: Event<void>;
 	onRequestCwd: Event<void>;
+	onRequestLatency: Event<void>;
 }
 
 export interface ITerminalProcessExtHostRequest {
@@ -699,6 +714,7 @@ export interface ITerminalProcessExtHostRequest {
 	activeWorkspaceRootUri: URI;
 	cols: number;
 	rows: number;
+	isWorkspaceShellAllowed: boolean;
 }
 
 export enum LinuxDistro {
@@ -733,4 +749,5 @@ export interface ITerminalChildProcess {
 
 	getInitialCwd(): Promise<string>;
 	getCwd(): Promise<string>;
+	getLatency(): Promise<number>;
 }
