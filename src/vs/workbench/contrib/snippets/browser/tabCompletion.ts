@@ -79,7 +79,11 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		}
 	}
 
-	private _getSnippets() {
+	private _onChordDetect(length: number) {
+		if (!this._editor.hasModel()) {
+			return;
+		}
+
 		// lots of dance for getting the
 		// XXX: Code duplicated from `_updateSnippets`.
 		//      Duplication is kept to minimize merge conflicts.
@@ -88,11 +92,11 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		model.tokenizeIfCheap(selection.positionLineNumber);
 		const id = model.getLanguageIdAtPosition(selection.positionLineNumber, selection.positionColumn);
 		const snippets = this._snippetService.getSnippetsSync(id);
-		return { selection, model, snippets };
-	}
 
-	private _onChordDetect(length: number) {
-		const { selection, model, snippets } = this._getSnippets();
+		if (!snippets) {
+			return;
+		}
+
 		const position = selection.getPosition();
 		const line = model.getLineContent(position.lineNumber).substr(0, position.column - 1);
 		if (line.length < length) {

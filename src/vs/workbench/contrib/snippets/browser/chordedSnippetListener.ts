@@ -12,7 +12,7 @@ import { KeyCode } from 'vs/base/common/keyCodes';
 
 export class ChordedSnippetListener extends Disposable {
 	private _activeKeys = {};
-	private _chord = null;
+	private _chord: { length: number; startColumn: number } | null = null;
 	constructor(
 		private _editor: ICodeEditor,
 		private _onDetect: (length: number) => void
@@ -61,7 +61,14 @@ export class ChordedSnippetListener extends Disposable {
 			e.keyCode === KeyCode.US_QUOTE;
 	}
 	private _update() {
-		const column = this._editor.getPosition().column;
+		if (!this._editor) {
+			return;
+		}
+		const position = this._editor.getPosition();
+		if (!position) {
+			return;
+		}
+		const column = position.column;
 		const count = Object.keys(this._activeKeys).length;
 		if (count > 0 && !this._chord) {
 			this._chord = {
