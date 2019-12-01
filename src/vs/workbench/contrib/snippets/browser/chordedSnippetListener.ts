@@ -11,12 +11,12 @@ import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { KeyCode } from 'vs/base/common/keyCodes';
 
 export class ChordedSnippetListener extends Disposable {
-	private _activeKeys = {};
+	private _activeKeys: {
+		[key: string]: boolean;
+		[key: number]: boolean;
+	} = {};
 	private _chord: { length: number; startColumn: number } | null = null;
-	constructor(
-		private _editor: ICodeEditor,
-		private _onDetect: (length: number) => void
-	) {
+	constructor(private _editor: ICodeEditor, private _onDetect: (length: number) => void) {
 		super();
 		this._register(_editor.onDidFocusEditorText(() => this.reset()));
 		this._register(_editor.onKeyDown(e => this.onKeyDown(e)));
@@ -47,7 +47,8 @@ export class ChordedSnippetListener extends Disposable {
 		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
 			return false;
 		}
-		return (e.keyCode >= KeyCode.KEY_A && e.keyCode <= KeyCode.KEY_Z) ||
+		return (
+			(e.keyCode >= KeyCode.KEY_A && e.keyCode <= KeyCode.KEY_Z) ||
 			(e.keyCode >= KeyCode.KEY_0 && e.keyCode <= KeyCode.KEY_9) ||
 			e.keyCode === KeyCode.US_SEMICOLON ||
 			e.keyCode === KeyCode.US_EQUAL ||
@@ -58,7 +59,8 @@ export class ChordedSnippetListener extends Disposable {
 			e.keyCode === KeyCode.US_OPEN_SQUARE_BRACKET ||
 			e.keyCode === KeyCode.US_BACKSLASH ||
 			e.keyCode === KeyCode.US_CLOSE_SQUARE_BRACKET ||
-			e.keyCode === KeyCode.US_QUOTE;
+			e.keyCode === KeyCode.US_QUOTE
+		);
 	}
 	private _update() {
 		if (!this._editor) {
