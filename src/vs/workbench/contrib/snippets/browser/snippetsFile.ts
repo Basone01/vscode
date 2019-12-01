@@ -86,6 +86,7 @@ export class Snippet {
 		readonly body: string,
 		readonly source: string,
 		readonly snippetSource: SnippetSource,
+		readonly chorded?: boolean,
 	) {
 		//
 		this.prefixLow = prefix ? prefix.toLowerCase() : prefix;
@@ -125,6 +126,7 @@ interface JsonSerializedSnippet {
 	scope: string;
 	prefix: string | string[];
 	description: string;
+	chorded: boolean;
 }
 
 function isJsonSerializedSnippet(thing: any): thing is JsonSerializedSnippet {
@@ -240,7 +242,7 @@ export class SnippetFile {
 
 	private _parseSnippet(name: string, snippet: JsonSerializedSnippet, bucket: Snippet[]): void {
 
-		let { prefix, body, description } = snippet;
+		let { prefix, body, description, chorded } = snippet;
 
 		if (Array.isArray(body)) {
 			body = body.join('\n');
@@ -289,7 +291,8 @@ export class SnippetFile {
 				description,
 				body,
 				source,
-				this.source
+				this.source,
+				chorded
 			));
 		});
 	}

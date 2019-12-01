@@ -4,7 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { KeyCode } from 'vs/base/common/keyCodes';
-import { RawContextKey, IContextKeyService, ContextKeyExpr, IContextKey } from 'vs/platform/contextkey/common/contextkey';
+import {
+	RawContextKey,
+	IContextKeyService,
+	ContextKeyExpr,
+	IContextKey
+} from 'vs/platform/contextkey/common/contextkey';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { ISnippetsService } from './snippets.contribution';
 import { getNonWhitespacePrefix } from './snippetsService';
@@ -19,10 +24,10 @@ import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { Snippet } from './snippetsFile';
 import { SnippetCompletion } from './snippetCompletionProvider';
+import { ChordedSnippetListener } from './chordedSnippetListener';
 import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export class TabCompletionController implements editorCommon.IEditorContribution {
-
 	public static readonly ID = 'editor.tabCompletionController';
 	static readonly ContextKey = new RawContextKey<boolean>('hasSnippetCompletions', undefined);
 
@@ -35,11 +40,12 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 	private _enabled?: boolean;
 	private _selectionListener?: IDisposable;
 	private readonly _configListener: IDisposable;
+	private _chordedSnippetListener: ChordedSnippetListener;
 
 	constructor(
 		private readonly _editor: ICodeEditor,
 		@ISnippetsService private readonly _snippetService: ISnippetsService,
-		@IContextKeyService contextKeyService: IContextKeyService,
+		@IContextKeyService contextKeyService: IContextKeyService
 	) {
 		this._hasSnippets = TabCompletionController.ContextKey.bindTo(contextKeyService);
 		this._configListener = this._editor.onDidChangeConfiguration(e => {
@@ -48,11 +54,13 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 			}
 		});
 		this._update();
+		this._chordedSnippetListener = new ChordedSnippetListener(this._editor, length => this._onChordDetect(length));
 	}
 
 	dispose(): void {
 		dispose(this._configListener);
 		dispose(this._selectionListener);
+		dispose(this._chordedSnippetListener);
 	}
 
 	private _update(): void {
@@ -70,8 +78,47 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		}
 	}
 
-	private _updateSnippets(): void {
+	private _onChordDetect(length: number) {
+		if (!this._editor.hasModel()) {
+			return;
+		}
 
+		// lots of dance for getting the
+		// XXX: Code duplicated from `_updateSnippets`.
+		//      Duplication is kept to minimize merge conflicts.
+		const selection = this._editor.getSelection();
+		const model = this._editor.getModel();
+		model.tokenizeIfCheap(selection.positionLineNumber);
+		const id = model.getLanguageIdAtPosition(selection.positionLineNumber, selection.positionColumn);
+		const snippets = this._snippetService.getSnippetsSync(id);
+
+		if (!snippets) {
+			return;
+		}
+
+		const position = selection.getPosition();
+		const line = model.getLineContent(position.lineNumber).substr(0, position.column - 1);
+		if (line.length < length) {
+			return;
+		}
+		const sortString = (s: string) =>
+			s
+				.split('')
+				.sort()
+				.join('');
+		const text = sortString(line.slice(-length));
+		for (const snippet of snippets) {
+			if (snippet.chorded && sortString(snippet.prefix) === text) {
+				SnippetController2.get(this._editor).insert(snippet.codeSnippet, {
+					overwriteBefore: snippet.prefix.length,
+					overwriteAfter: 0
+				});
+				return;
+			}
+		}
+	}
+
+	private _updateSnippets(): void {
 		// reset first
 		this._activeSnippets = [];
 
@@ -102,7 +149,6 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 					}
 				}
 			}
-
 		} else if (!Range.spansMultipleLines(selection) && model.getValueLengthInRange(selection) <= 100) {
 			// actual selection -> snippet must be a full match
 			const selected = model.getValueInRange(selection);
@@ -126,15 +172,20 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		if (this._activeSnippets.length === 1) {
 			// one -> just insert
 			const [snippet] = this._activeSnippets;
-			SnippetController2.get(this._editor).insert(snippet.codeSnippet, { overwriteBefore: snippet.prefix.length, overwriteAfter: 0 });
-
+			SnippetController2.get(this._editor).insert(snippet.codeSnippet, {
+				overwriteBefore: snippet.prefix.length,
+				overwriteAfter: 0
+			});
 		} else if (this._activeSnippets.length > 1) {
 			// two or more -> show IntelliSense box
 			const position = this._editor.getPosition();
-			showSimpleSuggestions(this._editor, this._activeSnippets.map(snippet => {
-				const range = Range.fromPositions(position.delta(0, -snippet.prefix.length), position);
-				return new SnippetCompletion(snippet, range);
-			}));
+			showSimpleSuggestions(
+				this._editor,
+				this._activeSnippets.map(snippet => {
+					const range = Range.fromPositions(position.delta(0, -snippet.prefix.length), position);
+					return new SnippetCompletion(snippet, range);
+				})
+			);
 		}
 	}
 }
@@ -143,17 +194,19 @@ registerEditorContribution(TabCompletionController.ID, TabCompletionController);
 
 const TabCompletionCommand = EditorCommand.bindToContribution<TabCompletionController>(TabCompletionController.get);
 
-registerEditorCommand(new TabCompletionCommand({
-	id: 'insertSnippet',
-	precondition: TabCompletionController.ContextKey,
-	handler: x => x.performSnippetCompletions(),
-	kbOpts: {
-		weight: KeybindingWeight.EditorContrib,
-		kbExpr: ContextKeyExpr.and(
-			EditorContextKeys.editorTextFocus,
-			EditorContextKeys.tabDoesNotMoveFocus,
-			SnippetController2.InSnippetMode.toNegated()
-		),
-		primary: KeyCode.Tab
-	}
-}));
+registerEditorCommand(
+	new TabCompletionCommand({
+		id: 'insertSnippet',
+		precondition: TabCompletionController.ContextKey,
+		handler: x => x.performSnippetCompletions(),
+		kbOpts: {
+			weight: KeybindingWeight.EditorContrib,
+			kbExpr: ContextKeyExpr.and(
+				EditorContextKeys.editorTextFocus,
+				EditorContextKeys.tabDoesNotMoveFocus,
+				SnippetController2.InSnippetMode.toNegated()
+			),
+			primary: KeyCode.Tab
+		}
+	})
+);

@@ -1,4 +1,64 @@
-# Visual Studio Code - Open Source ("Code - OSS")
+# โค้ด (@dtinth’s VS Code Fork)
+
+<p align="center">
+  <img src="./resources/code-dtinth-fork-logo.svg">
+</p>
+
+I had to fork VS Code to implement some features that would not be possible using [VS Code’s Extension API](https://code.visualstudio.com/docs/extensionAPI/overview).
+
+## Added features
+
+- [**Chorded Snippets**](https://github.com/Microsoft/vscode/issues/46487) — This allows me to type words by smashing multiple keys at once. For example, if I define this snippet:
+
+	```js
+	"const": {
+		"prefix": "nst",
+		"chorded": true,
+		"body": [
+			"const "
+		]
+	},
+	```
+
+	Note the `"chorded": true` directive. Now, if I smashed the <kbd>n</kbd><kbd>s</kbd><kbd>t</kbd> keys simultaneously (order doesn’t matter, but both 3 keys must be pressed at the same time) it will activate the snippet.
+
+- [**Rainbow Strings**](https://medium.com/hacking-atom/rainbow-strings-94a2b99cf8b7) — I prefer strings to be colorful, so in this fork if you set a text color to a magic color, `#fefeff`, then it turns into a rainbow.
+
+	```js
+    "editor.tokenColorCustomizations": {
+      "strings": "#fefeff"
+    },
+	```
+
+- **Rotating Cursor** — The cursor rotates when moving up and down. This requires the `editor.cursorSmoothCaretAnimation` setting to be turned on.
+
+## Demo
+
+![Demo](https://i.imgur.com/wxV0gAu.gif)
+
+- Chords: `fun`&rarr;`function$1 () {}`, `con`&rarr;`console.log($1)`, `ret`&rarr;`return`, `fal`&rarr;`false`
+- Rainbow strings (`'Hello'`)
+
+![Rotating cursor](https://i.imgur.com/qLHzA09.gif)
+
+## Building
+
+1. Clone this repository.
+
+2. Yarn.
+
+	```
+	yarn
+	```
+
+3. Build (for macOS).
+
+	```
+	yarn gulp vscode-darwin
+	```
+
+
+# Visual Studio Code - Open Source
 
 <!-- [![Build Status](https://dev.azure.com/vscode/VSCode/_apis/build/status/VS%20Code?branchName=master)](https://aka.ms/vscode-builds) -->
 [![Build Status](https://dev.azure.com/vscode/VSCode/_apis/build/status/VS%20Code?branchName=master)](https://dev.azure.com/vscode/VSCode/_build/latest?definitionId=12)
