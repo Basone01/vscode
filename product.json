@@ -1,7 +1,7 @@
 {
-	"nameShort": "โค้ด",
-	"nameLong": "โค้ด",
-	"applicationName": "code-oss",
+	"nameShort": "codeoss",
+	"nameLong": "codeoss",
+	"applicationName": "codeoss",
 	"dataFolderName": ".vscode-oss",
 	"win32MutexName": "vscodeoss",
 	"licenseName": "MIT",
@@ -20,7 +20,5 @@
 	"licenseFileName": "LICENSE.txt",
 	"reportIssueUrl": "https://github.com/Microsoft/vscode/issues/new",
 	"urlProtocol": "code-oss",
-	"extensionAllowedProposedApi": [
-		"ms-vscode.references-view"
-	]
+	"extensionAllowedProposedApi": ["ms-vscode.references-view"]
 }
